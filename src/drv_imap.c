@@ -1350,9 +1350,17 @@ static int
 prepare_box( char **buf, const imap_store_t *ctx )
 {
 	const char *name = ctx->name;
+	const char *pfx = ctx->prefix;
 
-	return prepare_name( buf, ctx,
-	    (starts_with( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) ? "" : ctx->prefix, name );
+	if (starts_with_upper( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) {
+		if (!memcmp( name, "INBOX", 5 )) {
+			pfx = "";
+		} else if (!*pfx) {
+			error( "IMAP error: cannot use unqualified '%s'. Did you mean INBOX?", name );
+			return -1;
+		}
+	}
+	return prepare_name( buf, ctx, pfx, name );
 }
 
 static int
