@@ -239,8 +239,8 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 	static char fbuf[as(Flags) + 1];
 	proxy_make_flags( cmd->data->flags, fbuf );
 //# END
-//# DEFINE fetch_msg_print_fmt_cb_args , flags=%s, date=%ld, size=%d
-//# DEFINE fetch_msg_print_pass_cb_args , fbuf, cmd->data->date, cmd->data->len
+//# DEFINE fetch_msg_print_fmt_cb_args , flags=%s, date=%lld, size=%d
+//# DEFINE fetch_msg_print_pass_cb_args , fbuf, (long long)cmd->data->date, cmd->data->len
 //# DEFINE fetch_msg_print_cb_args
 	if (sts == DRV_OK && (DFlags & DEBUG_DRV_ALL)) {
 		printf( "%s=========\n", cmd->gen.ctx->label );
@@ -254,8 +254,8 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 	static char fbuf[as(Flags) + 1];
 	proxy_make_flags( data->flags, fbuf );
 //# END
-//# DEFINE store_msg_print_fmt_args , flags=%s, date=%ld, size=%d, to_trash=%s
-//# DEFINE store_msg_print_pass_args , fbuf, data->date, data->len, to_trash ? "yes" : "no"
+//# DEFINE store_msg_print_fmt_args , flags=%s, date=%lld, size=%d, to_trash=%s
+//# DEFINE store_msg_print_pass_args , fbuf, (long long)data->date, data->len, to_trash ? "yes" : "no"
 //# DEFINE store_msg_print_args
 	if (DFlags & DEBUG_DRV_ALL) {
 		printf( "%s>>>>>>>>>\n", ctx->label );
