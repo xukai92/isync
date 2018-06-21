@@ -111,7 +111,7 @@ debug( const char *msg, ... )
 /* Keep the mailbox driver flag definitions in sync: */
 /* grep for MAILBOX_DRIVER_FLAG */
 /* The order is according to alphabetical maildir flag sort */
-static const char Flags[] = { 'D', 'F', 'R', 'S', 'T' };
+static const char Flags[] = { 'D', 'F', 'P', 'R', 'S', 'T' };
 
 static uchar
 maildir_parse_flags( const char *info_prefix, const char *base )
