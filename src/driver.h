@@ -44,7 +44,8 @@ typedef struct store_conf {
 } store_conf_t;
 
 /* For message->flags */
-/* Keep the mailbox driver flag definitions in sync! */
+/* Keep the mailbox driver flag definitions in sync: */
+/* grep for MAILBOX_DRIVER_FLAG */
 /* The order is according to alphabetical maildir flag sort */
 #define F_DRAFT	     (1<<0) /* Draft */
 #define F_FLAGGED    (1<<1) /* Flagged */

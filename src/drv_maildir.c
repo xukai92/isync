@@ -108,6 +108,9 @@ debug( const char *msg, ... )
 	va_end( va );
 }
 
+/* Keep the mailbox driver flag definitions in sync: */
+/* grep for MAILBOX_DRIVER_FLAG */
+/* The order is according to alphabetical maildir flag sort */
 static const char Flags[] = { 'D', 'F', 'R', 'S', 'T' };
 
 static uchar
