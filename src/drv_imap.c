@@ -2922,7 +2922,7 @@ imap_find_new_msgs_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 	cmd->uid = cmdp->uid;
 	cmd->gen.param.lastuid = 1;
 	imap_exec( ctx, &cmd->gen, imap_find_new_msgs_p3,
-	           "UID FETCH *:* (UID)" );
+	           "UID FETCH * (UID)" );
 }
 
 static void
