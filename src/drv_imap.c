@@ -3132,9 +3132,15 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			server->pass = nfstrdup( cfg->val );
 		else if (!strcasecmp( "PassCmd", cfg->cmd ))
 			server->pass_cmd = nfstrdup( cfg->val );
-		else if (!strcasecmp( "Port", cfg->cmd ))
-			server->sconf.port = parse_int( cfg );
-		else if (!strcasecmp( "Timeout", cfg->cmd ))
+		else if (!strcasecmp( "Port", cfg->cmd )) {
+			int port = parse_int( cfg );
+			if ((unsigned)port > 0xffff) {
+				error( "%s:%d: Invalid port number\n", cfg->file, cfg->line );
+				cfg->err = 1;
+			} else {
+				server->sconf.port = (ushort)port;
+			}
+		} else if (!strcasecmp( "Timeout", cfg->cmd ))
 			server->sconf.timeout = parse_int( cfg );
 		else if (!strcasecmp( "PipelineDepth", cfg->cmd )) {
 			if ((server->max_in_progress = parse_int( cfg )) < 1) {
