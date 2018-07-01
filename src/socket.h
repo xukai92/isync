@@ -43,7 +43,7 @@ enum {
 typedef struct {
 	char *tunnel;
 	char *host;
-	int port;
+	ushort port;
 	int timeout;
 #ifdef HAVE_LIBSSL
 	char *cert_file;
