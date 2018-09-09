@@ -287,7 +287,7 @@ send_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd )
 	int bufl, litplus, iovcnt = 1;
 	const char *buffmt;
 	conn_iovec_t iov[3];
-	char buf[1024];
+	char buf[4096];
 
 	cmd->tag = ++ctx->nexttag;
 	if (!cmd->param.data) {
@@ -444,7 +444,7 @@ imap_vprintf( const char *fmt, va_list ap )
 	char *d, *ed;
 	int maxlen;
 	char c;
-	char buf[1024]; /* Minimal supported command buffer size per IMAP spec. */
+	char buf[4096];
 
 	d = buf;
 	ed = d + sizeof(buf);
