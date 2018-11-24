@@ -597,8 +597,9 @@ imap_refcounted_new_cmd( imap_cmd_refcounted_state_t *sts )
 		free( sts ); \
 	}
 
-#define DONE_REFCOUNTED_STATE_ARGS(sts, ...) \
+#define DONE_REFCOUNTED_STATE_ARGS(sts, finalize, ...) \
 	if (!--sts->gen.ref_count) { \
+		finalize \
 		sts->callback( sts->gen.ret_val, __VA_ARGS__, sts->callback_aux ); \
 		free( sts ); \
 	}
@@ -1102,7 +1103,6 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		if (status & M_FLAGS)
 			msgdata->flags = mask;
 	} else {
-		/* XXX this will need sorting for out-of-order (multiple queries) */
 		cur = nfcalloc( sizeof(*cur) );
 		*ctx->msgapp = &cur->gen;
 		ctx->msgapp = &cur->gen.next;
@@ -2587,6 +2587,47 @@ imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenui
 	}
 }
 
+static int
+imap_sort_msgs_comp( const void *a_, const void *b_ )
+{
+	const message_t *a = *(const message_t * const *)a_;
+	const message_t *b = *(const message_t * const *)b_;
+
+	if (a->uid < b->uid)
+		return -1;
+	if (a->uid > b->uid)
+		return 1;
+	return 0;
+}
+
+static void
+imap_sort_msgs( imap_store_t *ctx )
+{
+	int count = count_generic_messages( ctx->msgs );
+	if (count <= 1)
+		return;
+
+	message_t **t = nfmalloc( sizeof(*t) * count );
+
+	message_t *m = ctx->msgs;
+	for (int i = 0; i < count; i++) {
+		t[i] = m;
+		m = m->next;
+	}
+
+	qsort( t, count, sizeof(*t), imap_sort_msgs_comp );
+
+	ctx->msgs = t[0];
+
+	int j;
+	for (j = 0; j < count - 1; j++)
+		t[j]->next = t[j + 1];
+	ctx->msgapp = &t[j]->next;
+	*ctx->msgapp = NULL;
+
+	free( t );
+}
+
 static void imap_submit_load_p2( imap_store_t *, imap_cmd_t *, int );
 
 static void
@@ -2615,7 +2656,10 @@ imap_submit_load_p2( imap_store_t *ctx, imap_cmd_t *cmd, int response )
 static void
 imap_submit_load_p3( imap_store_t *ctx, imap_load_box_state_t *sts )
 {
-	DONE_REFCOUNTED_STATE_ARGS(sts, ctx->msgs, ctx->total_msgs, ctx->recent_msgs)
+	DONE_REFCOUNTED_STATE_ARGS(sts, {
+		if (sts->gen.ret_val == DRV_OK)
+			imap_sort_msgs( ctx );
+	}, ctx->msgs, ctx->total_msgs, ctx->recent_msgs)
 }
 
 /******************* imap_fetch_msg *******************/
@@ -3013,7 +3057,7 @@ imap_list_store_p2( imap_store_t *ctx, imap_cmd_t *cmd, int response )
 static void
 imap_list_store_p3( imap_store_t *ctx, imap_list_store_state_t *sts )
 {
-	DONE_REFCOUNTED_STATE_ARGS(sts, ctx->boxes)
+	DONE_REFCOUNTED_STATE_ARGS(sts, , ctx->boxes)
 }
 
 /******************* imap_cancel_cmds *******************/
