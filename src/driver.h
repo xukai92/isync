@@ -261,6 +261,7 @@ struct driver {
 	int (*get_fail_state)( store_conf_t *conf );
 };
 
+int count_generic_messages( message_t * );
 void free_generic_messages( message_t * );
 
 void parse_generic_store( store_conf_t *store, conffile_t *cfg );
