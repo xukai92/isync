@@ -109,6 +109,7 @@ sub type_to_format($)
 {
 	$_ = shift;
 	s/xint /\%\#x/g;
+	s/uint /\%u/g;
 	s/int /\%d/g;
 	s/const char \*/\%s/g;
 	return $_;
