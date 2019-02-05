@@ -2073,7 +2073,7 @@ done_sasl_auth( imap_store_t *ctx, imap_cmd_t *cmd ATTR_UNUSED, int response )
 		int rc = sasl_client_step( ctx->sasl, NULL, 0, &interact, &out, &out_len );
 		if (process_sasl_step( ctx, rc, NULL, 0, interact, &out, &out_len ) < 0)
 			warn( "Warning: SASL reported failure despite successful IMAP authentication. Ignoring...\n" );
-		else if (out)
+		else if (out_len > 0)
 			warn( "Warning: SASL wants more steps despite successful IMAP authentication. Ignoring...\n" );
 	}
 
