@@ -18,14 +18,14 @@ fi
 
 need_perl=5.14
 AC_CACHE_CHECK([whether perl is recent enough], ob_cv_perl_ver, [
-    if $PERL -e "use v$need_perl;"; then
+    if $PERL -e "use v$need_perl;" 2> /dev/null; then
         ob_cv_perl_ver=yes
     else
         ob_cv_perl_ver=no
     fi
 ])
 if test "x$ob_cv_perl_ver" = "xno"; then
-    AC_MSG_ERROR([perl is too old])
+    AC_MSG_ERROR([perl is too old, need v$need_perl])
 fi
 
 AC_CACHE_CHECK([whether strftime supports %z], ob_cv_strftime_z,
