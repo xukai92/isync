@@ -1197,17 +1197,16 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 	return RESP_OK;
 }
 
+static int parse_list_rsp_p1( imap_store_t *, list_t *, char * );
 static int parse_list_rsp_p2( imap_store_t *, list_t *, char * );
 
 static int
 parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 {
-	char *arg;
 	list_t *lp;
 
 	if (!is_list( list )) {
 		free_list( list );
-	  bad_list:
 		error( "IMAP error: malformed LIST response\n" );
 		return LIST_BAD;
 	}
@@ -1217,10 +1216,19 @@ parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 			return LIST_OK;
 		}
 	free_list( list );
-	if (!(arg = next_arg( &cmd )))
-		goto bad_list;
-	if (!ctx->delimiter[0])
-		ctx->delimiter[0] = arg[0];
+	return parse_list( ctx, cmd, parse_list_rsp_p1 );
+}
+
+static int
+parse_list_rsp_p1( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
+{
+	if (!is_opt_atom( list )) {
+		error( "IMAP error: malformed LIST response\n" );
+		free_list( list );
+		return LIST_BAD;
+	}
+	if (!ctx->delimiter[0] && is_atom( list ))
+		ctx->delimiter[0] = list->val[0];
 	return parse_list( ctx, cmd, parse_list_rsp_p2 );
 }
 
