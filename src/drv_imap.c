@@ -1875,7 +1875,7 @@ ensure_password( imap_server_conf_t *srvc )
 	if (cmd) {
 		FILE *fp;
 		int ret;
-		char buffer[80];
+		char buffer[2048];  // Hopefully more than enough room for XOAUTH2, etc. tokens
 
 		if (*cmd == '+') {
 			flushn();
