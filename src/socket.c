@@ -299,6 +299,7 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 	static int ssl_inited;
 
 	conn->callbacks.starttls = cb;
+	conn->state = SCK_STARTTLS;
 
 	if (!ssl_inited) {
 		SSL_library_init();
@@ -329,7 +330,6 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 	}
 	SSL_set_mode( conn->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER );
 	socket_expect_read( conn, 1 );
-	conn->state = SCK_STARTTLS;
 	start_tls_p2( conn );
 }
 
