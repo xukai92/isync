@@ -317,8 +317,11 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 		start_tls_p3( conn, 0 );
 		return;
 	}
-	if (ssl_return( "set server name", conn, SSL_set_tlsext_host_name( conn->ssl, conn->conf->host ) ) < 0)
+	if (!SSL_set_tlsext_host_name( conn->ssl, conn->conf->host )) {
+		print_ssl_errors( "setting SSL server host name" );
+		start_tls_p3( conn, 0 );
 		return;
+	}
 	if (!SSL_set_fd( conn->ssl, conn->fd )) {
 		print_ssl_errors( "setting SSL socket fd" );
 		start_tls_p3( conn, 0 );
