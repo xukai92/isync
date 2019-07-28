@@ -210,7 +210,12 @@ init_ssl_ctx( const server_conf_t *conf )
 	if (conf->SSLContext)
 		return conf->ssl_ctx_valid;
 
-	mconf->SSLContext = SSL_CTX_new( SSLv23_client_method() );
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	const SSL_METHOD *method = TLS_client_method();
+#else
+	const SSL_METHOD *method = SSLv23_client_method();
+#endif
+	mconf->SSLContext = SSL_CTX_new( method );
 
 	if (!(conf->ssl_versions & SSLv3))
 		options |= SSL_OP_NO_SSLv3;
