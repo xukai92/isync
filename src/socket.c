@@ -243,7 +243,10 @@ init_ssl_ctx( const server_conf_t *conf )
 #else
 	const SSL_METHOD *method = SSLv23_client_method();
 #endif
-	mconf->SSLContext = SSL_CTX_new( method );
+	if (!(mconf->SSLContext = SSL_CTX_new( method ))) {
+		print_ssl_errors( "initializing SSL context" );
+		return 0;
+	}
 
 	if (!(conf->ssl_versions & SSLv3))
 		options |= SSL_OP_NO_SSLv3;
@@ -309,10 +312,18 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 	}
 
 	init_wakeup( &conn->ssl_fake, ssl_fake_cb, conn );
-	conn->ssl = SSL_new( ((server_conf_t *)conn->conf)->SSLContext );
+	if (!(conn->ssl = SSL_new( ((server_conf_t *)conn->conf)->SSLContext ))) {
+		print_ssl_errors( "initializing SSL connection" );
+		start_tls_p3( conn, 0 );
+		return;
+	}
 	if (ssl_return( "set server name", conn, SSL_set_tlsext_host_name( conn->ssl, conn->conf->host ) ) < 0)
 		return;
-	SSL_set_fd( conn->ssl, conn->fd );
+	if (!SSL_set_fd( conn->ssl, conn->fd )) {
+		print_ssl_errors( "setting SSL socket fd" );
+		start_tls_p3( conn, 0 );
+		return;
+	}
 	SSL_set_mode( conn->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER );
 	socket_expect_read( conn, 1 );
 	conn->state = SCK_STARTTLS;
