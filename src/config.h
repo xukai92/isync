@@ -40,7 +40,7 @@ typedef struct {
 
 char *get_arg( conffile_t *cfile, int required, int *comment );
 
-int parse_bool( conffile_t *cfile );
+char parse_bool( conffile_t *cfile );
 int parse_int( conffile_t *cfile );
 int parse_size( conffile_t *cfile );
 int getcline( conffile_t *cfile );

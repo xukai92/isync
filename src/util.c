@@ -695,7 +695,7 @@ init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux )
 }
 
 void
-conf_notifier( notifier_t *sn, int and_events, int or_events )
+conf_notifier( notifier_t *sn, short and_events, short or_events )
 {
 #ifdef HAVE_SYS_POLL_H
 	int idx = sn->index;

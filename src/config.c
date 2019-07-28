@@ -86,7 +86,7 @@ get_arg( conffile_t *cfile, int required, int *comment )
 	return ret;
 }
 
-int
+char
 parse_bool( conffile_t *cfile )
 {
 	if (!strcasecmp( cfile->val, "yes" ) ||

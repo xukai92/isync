@@ -1397,7 +1397,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	message_t *tmsg;
 	flag_vars_t *fv;
 	int no[2], del[2], alive, todel;
-	int sflags, nflags, aflags, dflags;
+	uchar sflags, nflags, aflags, dflags;
 	uint hashsz, idx;
 
 	if (check_ret( sts, aux ))
@@ -1723,7 +1723,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			if (!(srec->status & S_PENDING)) {
 				if (!srec->msg[S])
 					continue;
-				uint nex = (srec->wstate / W_NEXPIRE) & 1;
+				uchar nex = (srec->wstate / W_NEXPIRE) & 1;
 				if (nex != ((srec->status / S_EXPIRED) & 1)) {
 					/* The record needs a state change ... */
 					if (nex != ((srec->status / S_EXPIRE) & 1)) {
@@ -1991,14 +1991,14 @@ flags_set_p2( sync_vars_t *svars, sync_rec_t *srec, int t )
 		jFprintf( svars, "%c %u %u 0\n", "><"[t], srec->uid[M], srec->uid[S] );
 		srec->uid[1-t] = 0;
 	} else {
-		uint nflags = (srec->flags | srec->aflags[t]) & ~srec->dflags[t];
+		uchar nflags = (srec->flags | srec->aflags[t]) & ~srec->dflags[t];
 		if (srec->flags != nflags) {
 			debug( "  pair(%u,%u): updating flags (%u -> %u; %sed)\n", srec->uid[M], srec->uid[S], srec->flags, nflags, str_hl[t] );
 			srec->flags = nflags;
 			jFprintf( svars, "* %u %u %u\n", srec->uid[M], srec->uid[S], nflags );
 		}
 		if (t == S) {
-			uint nex = (srec->wstate / W_NEXPIRE) & 1;
+			uchar nex = (srec->wstate / W_NEXPIRE) & 1;
 			if (nex != ((srec->status / S_EXPIRED) & 1)) {
 				debug( "  pair(%u,%u): expired %d (commit)\n", srec->uid[M], srec->uid[S], nex );
 				srec->status = (srec->status & ~S_EXPIRED) | (nex * S_EXPIRED);
