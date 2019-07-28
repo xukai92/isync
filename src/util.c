@@ -592,7 +592,7 @@ arc4_init( void )
 	close( fd );
 
 	for (i = 0; i < 256; i++)
-		rs.s[i] = i;
+		rs.s[i] = (uchar)i;
 	for (i = j = 0; i < 256; i++) {
 		si = rs.s[i];
 		j += si + dat[i & 127];

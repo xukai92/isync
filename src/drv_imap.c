@@ -2377,7 +2377,7 @@ imap_open_store_ssl_bail( imap_store_t *ctx )
 static void
 imap_open_store_bail( imap_store_t *ctx, int failed )
 {
-	((imap_store_conf_t *)ctx->gen.conf)->server->failed = failed;
+	((imap_store_conf_t *)ctx->gen.conf)->server->failed = (char)failed;
 	ctx->callbacks.imap_open( DRV_STORE_BAD, ctx->callback_aux );
 }
 

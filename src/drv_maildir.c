@@ -1017,7 +1017,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 					entry->base = nfstrdup( e->d_name );
 					entry->msgid = 0;
 					entry->uid = uid;
-					entry->recent = i;
+					entry->recent = (uchar)i;
 					entry->size = 0;
 					entry->tuid[0] = 0;
 				}

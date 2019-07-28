@@ -957,11 +957,11 @@ load_state( sync_vars_t *svars )
 						break;
 					case '*':
 						debug( "flags now %u\n", t3 );
-						srec->flags = t3;
+						srec->flags = (uchar)t3;
 						break;
 					case '~':
 						debug( "status now %#x\n", t3 );
-						srec->status = t3;
+						srec->status = (uchar)t3;
 						break;
 					default:
 						error( "Error: unrecognized journal entry at %s:%d\n", svars->jname, line );
@@ -1895,7 +1895,7 @@ msgs_copied( sync_vars_t *svars, int t )
 				}
 				for (uint i = 0; i < TUIDL; i++) {
 					uchar c = arc4_getbyte() & 0x3f;
-					srec->tuid[i] = c < 26 ? c + 'A' : c < 52 ? c + 'a' - 26 : c < 62 ? c + '0' - 52 : c == 62 ? '+' : '/';
+					srec->tuid[i] = (char)(c < 26 ? c + 'A' : c < 52 ? c + 'a' - 26 : c < 62 ? c + '0' - 52 : c == 62 ? '+' : '/');
 				}
 				jFprintf( svars, "# %u %u %." stringify(TUIDL) "s\n", srec->uid[M], srec->uid[S], srec->tuid );
 				debug( "%sing message %u, TUID %." stringify(TUIDL) "s\n", str_hl[t], tmsg->uid, srec->tuid );
