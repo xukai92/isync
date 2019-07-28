@@ -176,22 +176,29 @@ verify_cert_host( const server_conf_t *conf, conn_t *sock )
 
 	trusted = (STACK_OF(X509_OBJECT) *)sock->conf->trusted_certs;
 	for (i = 0; i < sk_X509_OBJECT_num( trusted ); i++) {
-		if (!X509_cmp( cert, X509_OBJECT_get0_X509( sk_X509_OBJECT_value( trusted, i ) ) ))
+		if (!X509_cmp( cert, X509_OBJECT_get0_X509( sk_X509_OBJECT_value( trusted, i ) ) )) {
+			X509_free( cert );
 			return 0;
+		}
 	}
 
 	err = SSL_get_verify_result( sock->ssl );
 	if (err != X509_V_OK) {
 		error( "SSL error connecting %s: %s\n", sock->name, X509_verify_cert_error_string( err ) );
+		X509_free( cert );
 		return -1;
 	}
 
 	if (!conf->host) {
 		error( "SSL error connecting %s: Neither host nor matching certificate specified\n", sock->name );
+		X509_free( cert );
 		return -1;
 	}
 
-	return verify_hostname( cert, conf->host );
+	int ret = verify_hostname( cert, conf->host );
+
+	X509_free( cert );
+	return ret;
 }
 
 static int
