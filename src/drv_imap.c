@@ -306,8 +306,11 @@ send_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd )
 		buffmt = "%d %s{%d+}\r\n";
 		litplus = 1;
 	}
+DIAG_PUSH
+DIAG_DISABLE("-Wformat-nonliteral")
 	bufl = nfsnprintf( buf, sizeof(buf), buffmt,
 	                   cmd->tag, cmd->cmd, cmd->param.data_len );
+DIAG_POP
 	if (DFlags & DEBUG_NET) {
 		if (ctx->num_in_progress)
 			printf( "(%d in progress) ", ctx->num_in_progress );

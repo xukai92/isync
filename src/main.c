@@ -136,7 +136,7 @@ debug( const char *msg, ... )
 }
 
 #ifdef __linux__
-static void
+static void ATTR_NORETURN
 crashHandler( int n )
 {
 	int dpid;

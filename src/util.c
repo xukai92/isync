@@ -42,7 +42,7 @@ flushn( void )
 	}
 }
 
-static void
+static void ATTR_PRINTFLIKE(1, 0)
 printn( const char *msg, va_list va )
 {
 	if (*msg == '\v')

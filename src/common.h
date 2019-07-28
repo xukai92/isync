@@ -122,8 +122,8 @@ void stats( void );
 
 /* util.c */
 
-void vdebug( int, const char *, va_list va );
-void vdebugn( int, const char *, va_list va );
+void ATTR_PRINTFLIKE(2, 0) vdebug( int, const char *, va_list va );
+void ATTR_PRINTFLIKE(2, 0) vdebugn( int, const char *, va_list va );
 void ATTR_PRINTFLIKE(1, 2) info( const char *, ... );
 void ATTR_PRINTFLIKE(1, 2) infon( const char *, ... );
 void ATTR_PRINTFLIKE(1, 2) progress( const char *, ... );
@@ -163,7 +163,7 @@ void *nfcalloc( size_t sz );
 void *nfrealloc( void *mem, size_t sz );
 char *nfstrndup( const char *str, size_t nchars );
 char *nfstrdup( const char *str );
-int nfvasprintf( char **str, const char *fmt, va_list va );
+int ATTR_PRINTFLIKE(2, 0) nfvasprintf( char **str, const char *fmt, va_list va );
 int ATTR_PRINTFLIKE(2, 3) nfasprintf( char **str, const char *fmt, ... );
 int ATTR_PRINTFLIKE(3, 4) nfsnprintf( char *buf, int blen, const char *fmt, ... );
 void ATTR_NORETURN oob( void );
@@ -244,7 +244,7 @@ typedef struct {
 void init_wakeup( wakeup_t *tmr, void (*cb)( void * ), void *aux );
 void conf_wakeup( wakeup_t *tmr, int timeout );
 void wipe_wakeup( wakeup_t *tmr );
-static INLINE int pending_wakeup( wakeup_t *tmr ) { return tmr->links.next != 0; }
+static INLINE int ATTR_UNUSED pending_wakeup( wakeup_t *tmr ) { return tmr->links.next != 0; }
 
 void main_loop( void );
 
