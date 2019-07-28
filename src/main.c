@@ -248,8 +248,8 @@ is_inbox( const char *name )
 static int
 cmp_box_names( const void *a, const void *b )
 {
-	const char *as = *(const char **)a;
-	const char *bs = *(const char **)b;
+	const char *as = *(const char * const *)a;
+	const char *bs = *(const char * const *)b;
 	int ai = is_inbox( as );
 	int bi = is_inbox( bs );
 	int di = bi - ai;
@@ -1087,14 +1087,14 @@ sync_listed_boxes( main_vars_t *mvars, box_ent_t *mbox )
 		if (!mvars->list) {
 			nfasprintf( &mvars->names[M], "%s%s", mpfx, mbox->name );
 			nfasprintf( &mvars->names[S], "%s%s", spfx, mbox->name );
-			sync_boxes( mvars->ctx, (const char **)mvars->names, mbox->present, mvars->chan, done_sync_2_dyn, mvars );
+			sync_boxes( mvars->ctx, (const char * const *)mvars->names, mbox->present, mvars->chan, done_sync_2_dyn, mvars );
 			return 1;
 		}
 		printf( "%s%s <=> %s%s\n", mpfx, mbox->name, spfx, mbox->name );
 	} else {
 		if (!mvars->list) {
 			mvars->names[M] = mvars->names[S] = mbox->name;
-			sync_boxes( mvars->ctx, (const char **)mvars->names, mbox->present, mvars->chan, done_sync, mvars );
+			sync_boxes( mvars->ctx, (const char * const *)mvars->names, mbox->present, mvars->chan, done_sync, mvars );
 			return 1;
 		}
 		puts( mbox->name );

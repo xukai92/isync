@@ -541,7 +541,7 @@ map_name( const char *arg, char **result, int reserve, const char *in, const cha
 static int
 compare_uints( const void *l, const void *r )
 {
-	uint li = *(uint *)l, ri = *(uint *)r;
+	uint li = *(const uint *)l, ri = *(const uint *)r;
 	if (li != ri)  // Can't subtract, the result might not fit into signed int.
 		return li > ri ? 1 : -1;
 	return 0;

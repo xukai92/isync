@@ -649,7 +649,10 @@ static void
 make_key( const char *info_stop, DBT *tkey, const char *name )
 {
 	char *u = strpbrk( name, info_stop );
+DIAG_PUSH
+DIAG_DISABLE("-Wcast-qual")  // C has no const_cast<> ...
 	tkey->data = (char *)name;
+DIAG_POP
 	tkey->size = u ? (size_t)(u - name) : strlen( name );
 }
 #endif /* USE_DB */
@@ -844,7 +847,7 @@ maildir_set_uid( maildir_store_t *ctx, const char *name, uint *uid )
 static int
 maildir_compare( const void *l, const void *r )
 {
-	msg_t *lm = (msg_t *)l, *rm = (msg_t *)r;
+	const msg_t *lm = (const msg_t *)l, *rm = (const msg_t *)r;
 	char *ldot, *rdot, *ldot2, *rdot2, *lseq, *rseq;
 	int ret, llen, rlen;
 

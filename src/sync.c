@@ -1002,7 +1002,7 @@ static void box_opened2( sync_vars_t *svars, int t );
 static void load_box( sync_vars_t *svars, int t, uint minwuid, uint_array_t mexcs );
 
 void
-sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *chan,
+sync_boxes( store_t *ctx[], const char * const names[], int present[], channel_conf_t *chan,
             void (*cb)( int sts, void *aux ), void *aux )
 {
 	sync_vars_t *svars;

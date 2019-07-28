@@ -232,7 +232,10 @@ verify_cert_host( const server_conf_t *conf, conn_t *sock )
 static int
 init_ssl_ctx( const server_conf_t *conf )
 {
+DIAG_PUSH
+DIAG_DISABLE("-Wcast-qual")  // C has no 'mutable' or const_cast<> ...
 	server_conf_t *mconf = (server_conf_t *)conf;
+DIAG_POP
 
 	if (conf->SSLContext)
 		return conf->ssl_ctx_valid;
@@ -320,7 +323,7 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 	}
 
 	init_wakeup( &conn->ssl_fake, ssl_fake_cb, conn );
-	if (!(conn->ssl = SSL_new( ((server_conf_t *)conn->conf)->SSLContext ))) {
+	if (!(conn->ssl = SSL_new( ((server_conf_t const *)conn->conf)->SSLContext ))) {
 		print_ssl_errors( "initializing SSL connection" );
 		start_tls_p3( conn, 0 );
 		return;
