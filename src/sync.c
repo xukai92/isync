@@ -65,7 +65,7 @@ debugn( const char *msg, ... )
 	va_end( va );
 }
 
-void
+static void
 Fclose( FILE *f, int safe )
 {
 	if ((safe && (fflush( f ) || (UseFSync && fdatasync( fileno( f ) )))) || fclose( f ) == EOF) {
@@ -74,7 +74,7 @@ Fclose( FILE *f, int safe )
 	}
 }
 
-void ATTR_PRINTFLIKE(2, 0)
+static void ATTR_PRINTFLIKE(2, 0)
 vFprintf( FILE *f, const char *msg, va_list va )
 {
 	int r;
@@ -86,7 +86,7 @@ vFprintf( FILE *f, const char *msg, va_list va )
 	}
 }
 
-void ATTR_PRINTFLIKE(2, 3)
+static void ATTR_PRINTFLIKE(2, 3)
 Fprintf( FILE *f, const char *msg, ... )
 {
 	va_list va;
@@ -217,7 +217,7 @@ static int check_cancel( sync_vars_t *svars );
 #define ST_SENDING_NEW     (1<<15)
 
 
-void ATTR_PRINTFLIKE(2, 3)
+static void ATTR_PRINTFLIKE(2, 3)
 jFprintf( sync_vars_t *svars, const char *msg, ... )
 {
 	va_list va;

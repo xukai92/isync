@@ -3184,7 +3184,7 @@ imap_get_fail_state( store_conf_t *gconf )
 
 /******************* imap_parse_store *******************/
 
-imap_server_conf_t *servers, **serverapp = &servers;
+static imap_server_conf_t *servers, **serverapp = &servers;
 
 static int
 imap_parse_store( conffile_t *cfg, store_conf_t **storep )

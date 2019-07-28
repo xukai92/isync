@@ -49,8 +49,8 @@ const char *Home;	/* for config */
 
 int BufferLimit = 10 * 1024 * 1024;
 
-int chans_total, chans_done;
-int boxes_total, boxes_done;
+static int chans_total, chans_done;
+static int boxes_total, boxes_done;
 int new_total[2], new_done[2];
 int flags_total[2], flags_done[2];
 int trash_total[2], trash_done[2];

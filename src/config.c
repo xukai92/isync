@@ -34,7 +34,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-store_conf_t *stores;
+static store_conf_t *stores;
 
 char *
 get_arg( conffile_t *cfile, int required, int *comment )
