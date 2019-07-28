@@ -55,6 +55,22 @@ typedef unsigned long ulong;
 # define ATTR_PACKED(ref)
 #endif
 
+#if defined(__clang__)
+# define DO_PRAGMA__(text) _Pragma(#text)
+# define DIAG_PUSH DO_PRAGMA__(clang diagnostic push)
+# define DIAG_POP DO_PRAGMA__(clang diagnostic pop)
+# define DIAG_DISABLE(text) DO_PRAGMA__(clang diagnostic ignored text)
+#elif __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 5)
+# define DO_PRAGMA__(text) _Pragma(#text)
+# define DIAG_PUSH DO_PRAGMA__(GCC diagnostic push)
+# define DIAG_POP DO_PRAGMA__(GCC diagnostic pop)
+# define DIAG_DISABLE(text) DO_PRAGMA__(GCC diagnostic ignored text)
+#else
+# define DIAG_PUSH
+# define DIAG_POP
+# define DIAG_DISABLE(text)
+#endif
+
 #if __GNUC__ >= 7
 # define FALLTHROUGH __attribute__((fallthrough));
 #else
