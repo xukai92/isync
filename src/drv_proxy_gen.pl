@@ -128,7 +128,7 @@ for (@ptypes) {
 	/^([\w* ]+)\(\*(\w+)\)\( (.*) \)$/ or die("Cannot parse prototype '$_'\n");
 	my ($cmd_type, $cmd_name, $cmd_args) = ($1, $2, $3);
 	if (defined($excluded{$cmd_name})) {
-		push @cmd_table, "0";
+		push @cmd_table, "NULL";
 		next;
 	}
 	push @cmd_table, "proxy_$cmd_name";

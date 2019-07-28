@@ -74,7 +74,7 @@ print_ssl_errors( const char *fmt, ... )
 	nfvasprintf( &action, fmt, va );
 	va_end( va );
 	while ((err = ERR_get_error()))
-		error( "Error while %s: %s\n", action, ERR_error_string( err, 0 ) );
+		error( "Error while %s: %s\n", action, ERR_error_string( err, NULL ) );
 	free( action );
 }
 
@@ -85,7 +85,7 @@ print_ssl_socket_errors( const char *func, conn_t *conn )
 	int num = 0;
 
 	while ((err = ERR_get_error())) {
-		error( "Socket error: secure %s %s: %s\n", func, conn->name, ERR_error_string( err, 0 ) );
+		error( "Socket error: secure %s %s: %s\n", func, conn->name, ERR_error_string( err, NULL ) );
 		num++;
 	}
 	return num;
@@ -273,7 +273,7 @@ DIAG_POP
 		return 0;
 	}
 
-	if (conf->cert_file && !SSL_CTX_load_verify_locations( mconf->SSLContext, conf->cert_file, 0 )) {
+	if (conf->cert_file && !SSL_CTX_load_verify_locations( mconf->SSLContext, conf->cert_file, NULL )) {
 		print_ssl_errors( "loading certificate file '%s'", conf->cert_file );
 		return 0;
 	}
@@ -281,7 +281,7 @@ DIAG_POP
 	if (mconf->system_certs && !SSL_CTX_set_default_verify_paths( mconf->SSLContext )) {
 		ulong err;
 		while ((err = ERR_get_error()))
-			warn( "Warning: Unable to load default certificate files: %s\n", ERR_error_string( err, 0 ) );
+			warn( "Warning: Unable to load default certificate files: %s\n", ERR_error_string( err, NULL ) );
 	}
 
 	SSL_CTX_set_verify( mconf->SSLContext, SSL_VERIFY_NONE, NULL );
@@ -602,7 +602,7 @@ socket_connect_next( conn_t *conn )
 {
 	sys_error( "Cannot connect to %s", conn->name );
 	free( conn->name );
-	conn->name = 0;
+	conn->name = NULL;
 	conn->curr_addr = conn->curr_addr->ai_next;
 	socket_connect_one( conn );
 }
@@ -619,7 +619,7 @@ socket_connected( conn_t *conn )
 {
 	if (conn->addrs) {
 		freeaddrinfo( conn->addrs );
-		conn->addrs = 0;
+		conn->addrs = NULL;
 	}
 	conf_notifier( &conn->notify, 0, POLLIN );
 	socket_expect_activity( conn, 0 );
@@ -632,10 +632,10 @@ socket_cleanup_names( conn_t *conn )
 {
 	if (conn->addrs) {
 		freeaddrinfo( conn->addrs );
-		conn->addrs = 0;
+		conn->addrs = NULL;
 	}
 	free( conn->name );
-	conn->name = 0;
+	conn->name = NULL;
 }
 
 static void
@@ -656,7 +656,7 @@ socket_close( conn_t *sock )
 #ifdef HAVE_LIBSSL
 	if (sock->ssl) {
 		SSL_free( sock->ssl );
-		sock->ssl = 0;
+		sock->ssl = NULL;
 		wipe_wakeup( &sock->ssl_fake );
 	}
 #endif
@@ -664,17 +664,17 @@ socket_close( conn_t *sock )
 	if (sock->in_z) {
 		inflateEnd( sock->in_z );
 		free( sock->in_z );
-		sock->in_z = 0;
+		sock->in_z = NULL;
 		deflateEnd( sock->out_z );
 		free( sock->out_z );
-		sock->out_z = 0;
+		sock->out_z = NULL;
 		wipe_wakeup( &sock->z_fake );
 	}
 #endif
 	while (sock->write_buf)
 		dispose_chunk( sock );
 	free( sock->append_buf );
-	sock->append_buf = 0;
+	sock->append_buf = NULL;
 }
 
 static int
@@ -822,7 +822,7 @@ socket_read_line( conn_t *b )
 		}
 		if (b->state == SCK_EOF)
 			return (void *)~0;
-		return 0;
+		return NULL;
 	}
 	n = (uint)(p + 1 - s);
 	b->offset += n;
@@ -902,7 +902,7 @@ do_queued_write( conn_t *conn )
 static void
 do_append( conn_t *conn, buff_chunk_t *bc )
 {
-	bc->next = 0;
+	bc->next = NULL;
 	conn->buffer_mem += bc->len;
 	*conn->write_buf_append = bc;
 	conn->write_buf_append = &bc->next;
@@ -942,7 +942,7 @@ do_flush( conn_t *conn )
 			bc->len = (uint)((char *)conn->out_z->next_out - bc->data);
 			if (bc->len) {
 				do_append( conn, bc );
-				bc = 0;
+				bc = NULL;
 				buf_avail = 0;
 			} else {
 				buf_avail = conn->out_z->avail_out;
@@ -955,7 +955,7 @@ do_flush( conn_t *conn )
 #endif
 	if (bc) {
 		do_append( conn, bc );
-		conn->append_buf = 0;
+		conn->append_buf = NULL;
 #ifdef HAVE_LIBZ
 		conn->append_avail = 0;
 #endif
@@ -1033,7 +1033,7 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 			}
 			if (!buf_avail) {
 				do_append( conn, bc );
-				bc = 0;
+				bc = NULL;
 				break;
 			}
 		}

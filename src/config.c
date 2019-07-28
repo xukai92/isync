@@ -54,7 +54,7 @@ get_arg( conffile_t *cfile, int required, int *comment )
 			error( "%s:%d: parameter missing\n", cfile->file, cfile->line );
 			cfile->err = 1;
 		}
-		ret = 0;
+		ret = NULL;
 	} else {
 		for (escaped = 0, quoted = 0, ret = t = p; c; c = *p) {
 			p++;
@@ -74,12 +74,12 @@ get_arg( conffile_t *cfile, int required, int *comment )
 		if (escaped) {
 			error( "%s:%d: unterminated escape sequence\n", cfile->file, cfile->line );
 			cfile->err = 1;
-			ret = 0;
+			ret = NULL;
 		}
 		if (quoted) {
 			error( "%s:%d: missing closing quote\n", cfile->file, cfile->line );
 			cfile->err = 1;
-			ret = 0;
+			ret = NULL;
 		}
 	}
 	cfile->rest = p;
@@ -196,7 +196,7 @@ getopt_helper( conffile_t *cfile, int *cops, channel_conf_t *conf )
 				       cfile->file, cfile->line, arg );
 				cfile->err = 1;
 			}
-		while ((arg = get_arg( cfile, ARG_OPTIONAL, 0 )));
+		while ((arg = get_arg( cfile, ARG_OPTIONAL, NULL )));
 		conf->ops[M] |= XOP_HAVE_TYPE;
 	} else if (!strcasecmp( "SyncState", cfile->cmd ))
 		conf->sync_state = expand_strdup( cfile->val );
@@ -223,7 +223,7 @@ getopt_helper( conffile_t *cfile, int *cops, channel_conf_t *conf )
 						       cfile->file, cfile->line, boxOps[i].name, arg );
 						cfile->err = 1;
 					}
-				} while ((arg = get_arg( cfile, ARG_OPTIONAL, 0 )));
+				} while ((arg = get_arg( cfile, ARG_OPTIONAL, NULL )));
 				conf->ops[M] |= op * (XOP_HAVE_EXPUNGE / OP_EXPUNGE);
 				return 1;
 			}
@@ -239,7 +239,7 @@ getcline( conffile_t *cfile )
 	char *arg;
 	int comment;
 
-	if (cfile->rest && (arg = get_arg( cfile, ARG_OPTIONAL, 0 ))) {
+	if (cfile->rest && (arg = get_arg( cfile, ARG_OPTIONAL, NULL ))) {
 		error( "%s:%d: excess token '%s'\n", cfile->file, cfile->line, arg );
 		cfile->err = 1;
 	}
@@ -251,7 +251,7 @@ getcline( conffile_t *cfile )
 				continue;
 			return 1;
 		}
-		if (!(cfile->val = get_arg( cfile, ARG_REQUIRED, 0 )))
+		if (!(cfile->val = get_arg( cfile, ARG_REQUIRED, NULL )))
 			continue;
 		return 1;
 	}
@@ -343,7 +343,7 @@ load_config( const char *where, int pseudo )
 	cfile.bufl = sizeof(buf) - 1;
 	cfile.line = 0;
 	cfile.err = 0;
-	cfile.rest = 0;
+	cfile.rest = NULL;
 
 	gcops = 0;
 	global_conf.expire_unread = -1;
@@ -360,7 +360,7 @@ load_config( const char *where, int pseudo )
 						store->flat_delim = "";
 					*storeapp = store;
 					storeapp = &store->next;
-					*storeapp = 0;
+					*storeapp = NULL;
 				}
 				goto reloop;
 			}
@@ -382,7 +382,7 @@ load_config( const char *where, int pseudo )
 					arg = cfile.val;
 					do
 						add_string_list( &channel->patterns, arg );
-					while ((arg = get_arg( &cfile, ARG_OPTIONAL, 0 )));
+					while ((arg = get_arg( &cfile, ARG_OPTIONAL, NULL )));
 				}
 				else if (!strcasecmp( "Master", cfile.cmd )) {
 					ms = M;
@@ -438,17 +438,17 @@ load_config( const char *where, int pseudo )
 			group->name = nfstrdup( cfile.val );
 			*groupapp = group;
 			groupapp = &group->next;
-			*groupapp = 0;
+			*groupapp = NULL;
 			chanlistapp = &group->channels;
-			*chanlistapp = 0;
-			while ((arg = get_arg( &cfile, ARG_OPTIONAL, 0 ))) {
+			*chanlistapp = NULL;
+			while ((arg = get_arg( &cfile, ARG_OPTIONAL, NULL ))) {
 			  addone:
 				len = strlen( arg );
 				chanlist = nfmalloc( sizeof(*chanlist) + len );
 				memcpy( chanlist->string, arg, len + 1 );
 				*chanlistapp = chanlist;
 				chanlistapp = &chanlist->next;
-				*chanlistapp = 0;
+				*chanlistapp = NULL;
 			}
 			while (getcline( &cfile )) {
 				if (!cfile.cmd)

@@ -237,7 +237,7 @@ static void
 match_tuids( sync_vars_t *svars, int t, message_t *msgs )
 {
 	sync_rec_t *srec;
-	message_t *tmsg, *ntmsg = 0;
+	message_t *tmsg, *ntmsg = NULL;
 	const char *diag;
 	int num_lost = 0;
 
@@ -870,7 +870,7 @@ load_state( sync_vars_t *svars )
 				                 "(got %s, expected " JOURNAL_VERSION ")\n", buf );
 				goto jbail;
 			}
-			srec = 0;
+			srec = NULL;
 			line = 1;
 			while (fgets( buf, sizeof(buf), jfp )) {
 				line++;
@@ -1330,7 +1330,7 @@ box_opened2( sync_vars_t *svars, int t )
 	sync_ref( svars );
 	load_box( svars, M, minwuid, mexcs.array );
 	if (!check_cancel( svars ))
-		load_box( svars, S, (svars->opts[S] & OPEN_OLD) ? 1 : UINT_MAX, (uint_array_t){ 0, 0 } );
+		load_box( svars, S, (svars->opts[S] & OPEN_OLD) ? 1 : UINT_MAX, (uint_array_t){ NULL, 0 } );
 	sync_deref( svars );
 }
 
@@ -1748,7 +1748,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 					// but some are still propagated because they are important, we need to
 					// ensure explicitly that the bulk fetch limit is upped.
 					svars->mmaxxuid = srec->uid[M];
-					srec->msg[M]->srec = 0;
+					srec->msg[M]->srec = NULL;
 					srec->status = S_DEAD;
 				}
 			}
@@ -2063,7 +2063,7 @@ msgs_flags_set( sync_vars_t *svars, int t )
 							cv = nfmalloc( sizeof(*cv) );
 							cv->cb = msg_rtrashed;
 							cv->aux = INV_AUX;
-							cv->srec = 0;
+							cv->srec = NULL;
 							cv->msg = tmsg;
 							copy_msg( cv );
 							if (check_cancel( svars ))

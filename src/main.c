@@ -175,7 +175,7 @@ crashHandler( int n )
 		close( pip[1] );
 		close( pip[0] );
 #endif
-		waitpid( dpid, 0, 0 );
+		waitpid( dpid, NULL, 0 );
 		break;
 	}
 	exit( 3 );
@@ -262,7 +262,7 @@ static char **
 filter_boxes( string_list_t *boxes, const char *prefix, string_list_t *patterns )
 {
 	string_list_t *cpat;
-	char **boxarr = 0;
+	char **boxarr = NULL;
 	const char *ps;
 	uint not, fnot, pfxl, num = 0, rnum = 0;
 
@@ -287,7 +287,7 @@ filter_boxes( string_list_t *boxes, const char *prefix, string_list_t *patterns 
 			if (num + 1 >= rnum)
 				boxarr = nfrealloc( boxarr, (rnum = (rnum + 10) * 2) * sizeof(*boxarr) );
 			boxarr[num++] = nfstrdup( boxes->string + pfxl );
-			boxarr[num] = 0;
+			boxarr[num] = NULL;
 		}
 	}
 	qsort( boxarr, num, sizeof(*boxarr), cmp_box_names );
@@ -348,7 +348,7 @@ add_named_channel( chan_ent_t ***chanapp, char *channame, int ops[] )
 {
 	channel_conf_t *chan;
 	chan_ent_t *ce;
-	box_ent_t *boxes = 0, **mboxapp = &boxes, *mbox;
+	box_ent_t *boxes = NULL, **mboxapp = &boxes, *mbox;
 	char *boxp, *nboxp;
 	size_t boxl;
 	char boxlist = 0;
@@ -359,12 +359,12 @@ add_named_channel( chan_ent_t ***chanapp, char *channame, int ops[] )
 		if (!strcmp( chan->name, channame ))
 			goto gotchan;
 	error( "No channel or group named '%s' defined.\n", channame );
-	return 0;
+	return NULL;
   gotchan:
 	if (boxp) {
 		if (!chan->patterns) {
 			error( "Cannot override mailbox in channel '%s' - no Patterns.\n", channame );
-			return 0;
+			return NULL;
 		}
 		boxlist = 1;
 		do {
@@ -381,7 +381,7 @@ add_named_channel( chan_ent_t ***chanapp, char *channame, int ops[] )
 			else
 				mbox->name = nfstrndup( "INBOX", 5 );
 			mbox->present[M] = mbox->present[S] = BOX_POSSIBLE;
-			mbox->next = 0;
+			mbox->next = NULL;
 			*mboxapp = mbox;
 			mboxapp = &mbox->next;
 			boxes_total++;
@@ -426,11 +426,11 @@ int
 main( int argc, char **argv )
 {
 	main_vars_t mvars[1];
-	chan_ent_t *chans = 0, **chanapp = &chans;
+	chan_ent_t *chans = NULL, **chanapp = &chans;
 	group_conf_t *group;
 	channel_conf_t *chan;
 	string_list_t *channame;
-	char *config = 0, *opt, *ochar;
+	char *config = NULL, *opt, *ochar;
 	int oind, cops = 0, op, ops[2] = { 0, 0 }, pseudo = 0;
 
 	tzset();
@@ -447,7 +447,7 @@ main( int argc, char **argv )
 	memset( mvars, 0, sizeof(*mvars) );
 	mvars->t[1] = 1;
 
-	for (oind = 1, ochar = 0; ; ) {
+	for (oind = 1, ochar = NULL; ; ) {
 		if (!ochar || !*ochar) {
 			if (oind >= argc)
 				break;
@@ -846,7 +846,7 @@ sync_chans( main_vars_t *mvars, int ent )
 		if (mvars->skip)
 			goto next2;
 		mvars->state[M] = mvars->state[S] = ST_FRESH;
-		if ((DFlags & DEBUG_DRV) || (mvars->chan->stores[M]->driver->get_caps( 0 ) & mvars->chan->stores[S]->driver->get_caps( 0 ) & DRV_VERBOSE))
+		if ((DFlags & DEBUG_DRV) || (mvars->chan->stores[M]->driver->get_caps( NULL ) & mvars->chan->stores[S]->driver->get_caps( NULL ) & DRV_VERBOSE))
 			labels[M] = "M: ", labels[S] = "S: ";
 		else
 			labels[M] = labels[S] = "";
@@ -881,8 +881,8 @@ sync_chans( main_vars_t *mvars, int ent )
 			boxes[S] = filter_boxes( mvars->boxes[S], mvars->chan->boxes[S], mvars->chan->patterns );
 			mboxapp = &mvars->chanptr->boxes;
 			for (mb = sb = 0; ; ) {
-				char *mname = boxes[M] ? boxes[M][mb] : 0;
-				char *sname = boxes[S] ? boxes[S][sb] : 0;
+				char *mname = boxes[M] ? boxes[M][mb] : NULL;
+				char *sname = boxes[S] ? boxes[S][sb] : NULL;
 				if (!mname && !sname)
 					break;
 				mbox = nfmalloc( sizeof(*mbox) );
@@ -903,7 +903,7 @@ sync_chans( main_vars_t *mvars, int ent )
 					mbox->present[S] = BOX_PRESENT;
 					sb++;
 				}
-				mbox->next = 0;
+				mbox->next = NULL;
 				*mboxapp = mbox;
 				mboxapp = &mbox->next;
 				boxes_total++;
@@ -945,7 +945,7 @@ sync_chans( main_vars_t *mvars, int ent )
 		mvars->cben = 0;
 		for (t = 0; t < 2; t++) {
 			free_string_list( mvars->boxes[t] );
-			mvars->boxes[t] = 0;
+			mvars->boxes[t] = NULL;
 			if (mvars->state[t] == ST_FRESH) {
 				/* An unconnected store may be only cancelled. */
 				mvars->state[t] = ST_CLOSED;
@@ -966,7 +966,7 @@ sync_chans( main_vars_t *mvars, int ent )
 				free( mbox->name );
 				free( mbox );
 			}
-			mvars->chanptr->boxes = 0;
+			mvars->chanptr->boxes = NULL;
 			mvars->chanptr->boxlist = 0;
 		}
 	  next2:

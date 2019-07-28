@@ -134,7 +134,7 @@ static INLINE void socket_init( conn_t *conn,
 	conn->write_callback = write_callback;
 	conn->callback_aux = aux;
 	conn->fd = -1;
-	conn->name = 0;
+	conn->name = NULL;
 	conn->write_buf_append = &conn->write_buf;
 }
 void socket_connect( conn_t *conn, void (*cb)( int ok, void *aux ) );

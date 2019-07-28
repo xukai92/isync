@@ -455,7 +455,7 @@ expand_strdup( const char *s )
 	if (*s == '~') {
 		s++;
 		if (!*s) {
-			p = 0;
+			p = NULL;
 			q = Home;
 		} else if (*s == '/') {
 			p = s;
@@ -468,7 +468,7 @@ expand_strdup( const char *s )
 			} else
 				pw = getpwnam( s );
 			if (!pw)
-				return 0;
+				return NULL;
 			q = pw->pw_dir;
 		}
 		nfasprintf( &r, "%s%s", q, p ? p : "" );
@@ -656,7 +656,7 @@ list_unlink( list_head_t *head )
 	assert( head->prev->next == head);
 	head->next->prev = head->prev;
 	head->prev->next = head->next;
-	head->next = head->prev = 0;
+	head->next = head->prev = NULL;
 }
 
 static notifier_t *notifiers;
@@ -714,7 +714,7 @@ wipe_notifier( notifier_t *sn )
 	for (snp = &notifiers; *snp != sn; snp = &(*snp)->next)
 		assert( *snp );
 	*snp = sn->next;
-	sn->next = 0;
+	sn->next = NULL;
 	changed = 1;
 
 #ifdef HAVE_SYS_POLL_H
@@ -730,7 +730,7 @@ wipe_notifier( notifier_t *sn )
 static time_t
 get_now( void )
 {
-	return time( 0 );
+	return time( NULL );
 }
 
 static list_head_t timers = { &timers, &timers };
@@ -740,7 +740,7 @@ init_wakeup( wakeup_t *tmr, void (*cb)( void * ), void *aux )
 {
 	tmr->cb = cb;
 	tmr->aux = aux;
-	tmr->links.next = tmr->links.prev = 0;
+	tmr->links.next = tmr->links.prev = NULL;
 }
 
 void

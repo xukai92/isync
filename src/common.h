@@ -191,7 +191,7 @@ int map_name( const char *arg, char **result, uint reserve, const char *in, cons
 	}
 
 #define ARRAY_INIT(arr) \
-	do { (arr)->array.data = 0; (arr)->array.size = (arr)->alloc = 0; } while (0)
+	do { (arr)->array.data = NULL; (arr)->array.size = (arr)->alloc = 0; } while (0)
 
 #define ARRAY_SQUEEZE(arr) \
 	do { \
@@ -245,7 +245,7 @@ typedef struct {
 void init_wakeup( wakeup_t *tmr, void (*cb)( void * ), void *aux );
 void conf_wakeup( wakeup_t *tmr, int timeout );
 void wipe_wakeup( wakeup_t *tmr );
-static INLINE int ATTR_UNUSED pending_wakeup( wakeup_t *tmr ) { return tmr->links.next != 0; }
+static INLINE int ATTR_UNUSED pending_wakeup( wakeup_t *tmr ) { return tmr->links.next != NULL; }
 
 void main_loop( void );
 

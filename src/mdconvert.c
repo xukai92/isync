@@ -117,11 +117,11 @@ convert( const char *box, int altmap )
 		sys_error( "Cannot create %s", tdpath );
 		goto sbork;
 	}
-	if (db_create( &db, 0, 0 )) {
+	if (db_create( &db, NULL, 0 )) {
 		fputs( "Error: db_create() failed\n", stderr );
 		goto tbork;
 	}
-	if ((ret = (db->open)( db, 0, dbpath, 0, DB_HASH, altmap ? DB_CREATE|DB_TRUNCATE : 0, 0 ))) {
+	if ((ret = (db->open)( db, NULL, dbpath, NULL, DB_HASH, altmap ? DB_CREATE|DB_TRUNCATE : 0, 0 ))) {
 		db->err( db, ret, "Error: db->open(%s)", dbpath );
 	  dbork:
 		db->close( db, 0 );
@@ -143,12 +143,12 @@ convert( const char *box, int altmap )
 		}
 		value.data = uv;
 		value.size = sizeof(uv);
-		if ((ret = db->put( db, 0, &key, &value, 0 ))) {
+		if ((ret = db->put( db, NULL, &key, &value, 0 ))) {
 			db->err( db, ret, "Error: cannot write UIDVALIDITY for '%s'", box );
 			goto dbork;
 		}
 	} else {
-		if ((ret = db->get( db, 0, &key, &value, 0 ))) {
+		if ((ret = db->get( db, NULL, &key, &value, 0 ))) {
 			db->err( db, ret, "Error: cannot read UIDVALIDITY of '%s'", box );
 			goto dbork;
 		}
@@ -188,7 +188,7 @@ convert( const char *box, int altmap )
 				uid = atoi( p + 3 );
 				value.data = &uid;
 				value.size = sizeof(uid);
-				if ((ret = db->put( db, 0, &key, &value, 0 ))) {
+				if ((ret = db->put( db, NULL, &key, &value, 0 ))) {
 					db->err( db, ret, "Error: cannot write UID for '%s'", box );
 					goto ebork;
 				}
@@ -197,7 +197,7 @@ convert( const char *box, int altmap )
 				s = strpbrk( e->d_name, ",:" );
 				key.data = e->d_name;
 				key.size = s ? (size_t)(s - e->d_name) : strlen( e->d_name );
-				if ((ret = db->get( db, 0, &key, &value, 0 ))) {
+				if ((ret = db->get( db, NULL, &key, &value, 0 ))) {
 					if (ret != DB_NOTFOUND) {
 						db->err( db, ret, "Error: cannot read UID for '%s'", box );
 						goto ebork;

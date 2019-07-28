@@ -336,7 +336,7 @@ DIAG_POP
 		iov[1].buf = cmd->param.data;
 		iov[1].len = cmd->param.data_len;
 		iov[1].takeOwn = GiveOwn;
-		cmd->param.data = 0;
+		cmd->param.data = NULL;
 		ctx->buffer_mem -= cmd->param.data_len;
 		iov[2].buf = "\r\n";
 		iov[2].len = 2;
@@ -346,7 +346,7 @@ DIAG_POP
 	socket_write( &ctx->conn, iov, iovcnt );
 	if (cmd->param.to_trash && ctx->trashnc == TrashUnknown)
 		ctx->trashnc = TrashChecking;
-	cmd->next = 0;
+	cmd->next = NULL;
 	*ctx->in_progress_append = cmd;
 	ctx->in_progress_append = &cmd->next;
 	ctx->num_in_progress++;
@@ -435,7 +435,7 @@ submit_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd )
 			cmd->next = ctx->pending;
 			ctx->pending = cmd;
 		} else {
-			cmd->next = 0;
+			cmd->next = NULL;
 			*ctx->pending_append = cmd;
 			ctx->pending_append = &cmd->next;
 		}
@@ -649,7 +649,7 @@ imap_strchr( const char *s, char tc )
 		if (c == '\\')
 			c = *++s;
 		if (!c)
-			return 0;
+			return NULL;
 		if (c == tc)
 			return s;
 	}
@@ -664,12 +664,12 @@ next_arg( char **ps )
 	assert( ps );
 	s = *ps;
 	if (!s)
-		return 0;
+		return NULL;
 	while (isspace( (uchar)*s ))
 		s++;
 	if (!*s) {
-		*ps = 0;
-		return 0;
+		*ps = NULL;
+		return NULL;
 	}
 	if (*s == '"') {
 		s++;
@@ -678,8 +678,8 @@ next_arg( char **ps )
 			if (c == '\\')
 				c = *s++;
 			if (!c) {
-				*ps = 0;
-				return 0;
+				*ps = NULL;
+				return NULL;
 			}
 			*d++ = c;
 		}
@@ -695,7 +695,7 @@ next_arg( char **ps )
 		}
 	}
 	if (!*s)
-		s = 0;
+		s = NULL;
 
 	*ps = s;
 	return ret;
@@ -772,9 +772,9 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			goto next;
 		}
 		*curp = cur = nfmalloc( sizeof(*cur) );
-		cur->val = 0; /* for clean bail */
+		cur->val = NULL; /* for clean bail */
 		curp = &cur->next;
-		*curp = 0; /* ditto */
+		*curp = NULL; /* ditto */
 		if (*s == '(') {
 			/* sublist */
 			if (sts->level == MAX_LIST_DEPTH)
@@ -783,7 +783,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			cur->val = LIST;
 			sts->stack[sts->level++] = curp;
 			curp = &cur->child;
-			*curp = 0; /* for clean bail */
+			*curp = NULL; /* for clean bail */
 			goto next2;
 		} else if (ctx && *s == '{') {
 			/* literal */
@@ -873,7 +873,7 @@ parse_list_init( parse_list_state_t *sts )
 {
 	sts->need_bytes = -1;
 	sts->level = 1;
-	sts->head = 0;
+	sts->head = NULL;
 	sts->stack[0] = &sts->head;
 }
 
@@ -883,8 +883,8 @@ parse_list_continue( imap_store_t *ctx, char *s )
 	list_t *list;
 	int resp;
 	if ((resp = parse_imap_list( ctx, &s, &ctx->parse_list_sts )) != LIST_PARTIAL) {
-		list = (resp == LIST_BAD) ? 0 : ctx->parse_list_sts.head;
-		ctx->parse_list_sts.head = 0;
+		list = (resp == LIST_BAD) ? NULL : ctx->parse_list_sts.head;
+		ctx->parse_list_sts.head = NULL;
 		resp = ctx->parse_list_sts.callback( ctx, list, s );
 	}
 	return resp;
@@ -971,7 +971,7 @@ static int
 parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
 	list_t *tmp, *flags;
-	char *body = 0, *tuid = 0, *msgid = 0, *ep;
+	char *body = NULL, *tuid = NULL, *msgid = NULL, *ep;
 	imap_message_t *cur;
 	msg_data_t *msgdata;
 	imap_cmd_t *cmdp;
@@ -1034,7 +1034,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 				tmp = tmp->next;
 				if (is_atom( tmp )) {
 					body = tmp->val;
-					tmp->val = 0;       /* don't free together with list */
+					tmp->val = NULL;       /* don't free together with list */
 					size = tmp->len;
 				} else
 					error( "IMAP error: unable to parse BODY[]\n" );
@@ -1117,12 +1117,12 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		cur = nfcalloc( sizeof(*cur) );
 		*ctx->msgapp = &cur->gen;
 		ctx->msgapp = &cur->gen.next;
-		cur->gen.next = 0;
+		cur->gen.next = NULL;
 		cur->gen.uid = uid;
 		cur->gen.flags = mask;
 		cur->gen.status = status;
 		cur->gen.size = size;
-		cur->gen.srec = 0;
+		cur->gen.srec = NULL;
 		cur->gen.msgid = msgid;
 		if (tuid)
 			memcpy( cur->gen.tuid, tuid, TUIDL );
@@ -1141,7 +1141,7 @@ parse_capability( imap_store_t *ctx, char *cmd )
 	uint i;
 
 	free_string_list( ctx->auth_mechs );
-	ctx->auth_mechs = 0;
+	ctx->auth_mechs = NULL;
 	ctx->caps = 0x80000000;
 	while ((arg = next_arg( &cmd ))) {
 		if (starts_with( arg, -1, "AUTH=", 5 )) {
@@ -1393,7 +1393,7 @@ imap_socket_read( void *aux )
 
 	for (;;) {
 		if (ctx->parse_list_sts.level) {
-			resp = parse_list_continue( ctx, 0 );
+			resp = parse_list_continue( ctx, NULL );
 		  listret:
 			if (resp == LIST_PARTIAL)
 				return;
@@ -1427,7 +1427,7 @@ imap_socket_read( void *aux )
 			}
 
 			if (ctx->greeting == GreetingPending && !strcmp( "PREAUTH", arg )) {
-				parse_response_code( ctx, 0, cmd );
+				parse_response_code( ctx, NULL, cmd );
 				ctx->greeting = GreetingPreauth;
 			  dogreet:
 				imap_ref( ctx );
@@ -1435,7 +1435,7 @@ imap_socket_read( void *aux )
 				if (imap_deref( ctx ))
 					return;
 			} else if (!strcmp( "OK", arg )) {
-				parse_response_code( ctx, 0, cmd );
+				parse_response_code( ctx, NULL, cmd );
 				if (ctx->greeting == GreetingPending) {
 					ctx->greeting = GreetingOk;
 					goto dogreet;
@@ -1499,7 +1499,7 @@ imap_socket_read( void *aux )
 				iov[0].buf = cmdp->param.data;
 				iov[0].len = cmdp->param.data_len;
 				iov[0].takeOwn = GiveOwn;
-				cmdp->param.data = 0;
+				cmdp->param.data = NULL;
 				ctx->buffer_mem -= cmdp->param.data_len;
 				iov[1].buf = "\r\n";
 				iov[1].len = 2;
@@ -1667,7 +1667,7 @@ imap_free_store( store_t *gctx )
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
 	free_generic_messages( ctx->msgs );
-	ctx->msgs = 0;
+	ctx->msgs = NULL;
 	imap_set_bad_callback( gctx, imap_cancel_unowned, gctx );
 	gctx->next = unowned;
 	unowned = gctx;
@@ -1687,7 +1687,7 @@ imap_cleanup( void )
 		imap_set_bad_callback( ctx, (void (*)(void *))imap_cancel_store, ctx );
 		if (((imap_store_t *)ctx)->state != SST_BAD) {
 			((imap_store_t *)ctx)->expectBYE = 1;
-			imap_exec( (imap_store_t *)ctx, 0, imap_cleanup_p2, "LOGOUT" );
+			imap_exec( (imap_store_t *)ctx, NULL, imap_cleanup_p2, "LOGOUT" );
 		} else {
 			imap_cancel_store( ctx );
 		}
@@ -1832,7 +1832,7 @@ imap_open_store_greeted( imap_store_t *ctx )
 {
 	socket_expect_activity( &ctx->conn, 0 );
 	if (!ctx->caps)
-		imap_exec( ctx, 0, imap_open_store_p2, "CAPABILITY" );
+		imap_exec( ctx, NULL, imap_open_store_p2, "CAPABILITY" );
 	else
 		imap_open_store_authenticate( ctx );
 }
@@ -1858,7 +1858,7 @@ imap_open_store_authenticate( imap_store_t *ctx )
 #ifdef HAVE_LIBSSL
 		if (srvc->ssl_type == SSL_STARTTLS) {
 			if (CAP(STARTTLS)) {
-				imap_exec( ctx, 0, imap_open_store_authenticate_p2, "STARTTLS" );
+				imap_exec( ctx, NULL, imap_open_store_authenticate_p2, "STARTTLS" );
 				return;
 			} else {
 				error( "IMAP error: SSL support not available\n" );
@@ -1898,7 +1898,7 @@ imap_open_store_tlsstarted2( int ok, void *aux )
 	if (!ok)
 		imap_open_store_ssl_bail( ctx );
 	else
-		imap_exec( ctx, 0, imap_open_store_authenticate_p3, "CAPABILITY" );
+		imap_exec( ctx, NULL, imap_open_store_authenticate_p3, "CAPABILITY" );
 }
 
 static void
@@ -1916,7 +1916,7 @@ ensure_user( imap_server_conf_t *srvc )
 {
 	if (!srvc->user) {
 		error( "Skipping account %s, no user\n", srvc->name );
-		return 0;
+		return NULL;
 	}
 	return srvc->user;
 }
@@ -1938,7 +1938,7 @@ ensure_password( imap_server_conf_t *srvc )
 		if (!(fp = popen( cmd, "r" ))) {
 		  pipeerr:
 			sys_error( "Skipping account %s, password command failed", srvc->name );
-			return 0;
+			return NULL;
 		}
 		if (!fgets( buffer, sizeof(buffer), fp ))
 			buffer[0] = 0;
@@ -1949,11 +1949,11 @@ ensure_password( imap_server_conf_t *srvc )
 				error( "Skipping account %s, password command crashed\n", srvc->name );
 			else
 				error( "Skipping account %s, password command exited with status %d\n", srvc->name, WEXITSTATUS( ret ) );
-			return 0;
+			return NULL;
 		}
 		if (!buffer[0]) {
 			error( "Skipping account %s, password command produced no output\n", srvc->name );
-			return 0;
+			return NULL;
 		}
 		buffer[strcspn( buffer, "\n" )] = 0; /* Strip trailing newline */
 		free( srvc->pass ); /* From previous runs */
@@ -1970,7 +1970,7 @@ ensure_password( imap_server_conf_t *srvc )
 		}
 		if (!*pass) {
 			error( "Skipping account %s, no password\n", srvc->name );
-			return 0;
+			return NULL;
 		}
 		/* getpass() returns a pointer to a static buffer. Make a copy for long term storage. */
 		srvc->pass = nfstrdup( pass );
@@ -2254,7 +2254,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		if (!ctx->conn.ssl)
 #endif
 			warn( "*** IMAP Warning *** Password is being sent in the clear\n" );
-		imap_exec( ctx, 0, imap_open_store_authenticate2_p2,
+		imap_exec( ctx, NULL, imap_open_store_authenticate2_p2,
 		           "LOGIN \"%\\s\" \"%\\s\"", srvc->user, srvc->pass );
 		return;
 	}
@@ -2284,7 +2284,7 @@ imap_open_store_compress( imap_store_t *ctx )
 {
 #ifdef HAVE_LIBZ
 	if (CAP(COMPRESS_DEFLATE)) {
-		imap_exec( ctx, 0, imap_open_store_compress_p2, "COMPRESS DEFLATE" );
+		imap_exec( ctx, NULL, imap_open_store_compress_p2, "COMPRESS DEFLATE" );
 		return;
 	}
 #endif
@@ -2316,7 +2316,7 @@ imap_open_store_namespace( imap_store_t *ctx )
 	if (((!ctx->prefix && cfg->use_namespace) || !cfg->delimiter) && CAP(NAMESPACE)) {
 		/* get NAMESPACE info */
 		if (!ctx->got_namespace)
-			imap_exec( ctx, 0, imap_open_store_namespace_p2, "NAMESPACE" );
+			imap_exec( ctx, NULL, imap_open_store_namespace_p2, "NAMESPACE" );
 		else
 			imap_open_store_namespace2( ctx );
 		return;
@@ -2390,7 +2390,7 @@ imap_select_box( store_t *gctx, const char *name )
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
 	free_generic_messages( ctx->msgs );
-	ctx->msgs = 0;
+	ctx->msgs = NULL;
 	ctx->msgapp = &ctx->msgs;
 
 	ctx->name = name;
@@ -2400,7 +2400,7 @@ imap_select_box( store_t *gctx, const char *name )
 static const char *
 imap_get_box_path( store_t *gctx ATTR_UNUSED )
 {
-	return 0;
+	return NULL;
 }
 
 typedef struct {
@@ -2623,7 +2623,7 @@ imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenui
 
 	if (!ctx->total_msgs) {
 		free( excs.data );
-		cb( DRV_OK, 0, 0, 0, aux );
+		cb( DRV_OK, NULL, 0, 0, aux );
 	} else {
 		INIT_REFCOUNTED_STATE(imap_load_box_state_t, sts, cb, aux)
 		for (uint i = 0; i < excs.size; ) {
@@ -2751,7 +2751,7 @@ imap_fetch_msg( store_t *ctx, message_t *msg, msg_data_t *data,
 	INIT_IMAP_CMD_X(imap_cmd_fetch_msg_t, cmd, cb, aux)
 	cmd->gen.gen.param.uid = msg->uid;
 	cmd->msg_data = data;
-	data->data = 0;
+	data->data = NULL;
 	imap_exec( (imap_store_t *)ctx, &cmd->gen.gen, imap_fetch_msg_p2,
 	           "UID FETCH %u (%s%sBODY.PEEK[])", msg->uid,
 	           !(msg->status & M_FLAGS) ? "FLAGS " : "",
@@ -3208,8 +3208,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		server->name = nfstrdup( cfg->val );
 		*serverapp = server;
 		serverapp = &server->next;
-		store = 0;
-		*storep = 0;
+		store = NULL;
+		*storep = NULL;
 	} else if (!strcasecmp( "IMAPStore", cfg->cmd )) {
 		store = nfcalloc( sizeof(*store) );
 		store->gen.driver = &imap_driver;
@@ -3283,7 +3283,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				error( "%s:%d: Unrecognized IMAP extension '%s'\n", cfg->file, cfg->line, arg );
 				cfg->err = 1;
 			  gotcap: ;
-			} while ((arg = get_arg( cfg, ARG_OPTIONAL, 0 )));
+			} while ((arg = get_arg( cfg, ARG_OPTIONAL, NULL )));
 		}
 #ifdef HAVE_LIBSSL
 		else if (!strcasecmp( "CertificateFile", cfg->cmd )) {
@@ -3343,7 +3343,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 					error( "%s:%d: Unrecognized SSL version\n", cfg->file, cfg->line );
 					cfg->err = 1;
 				}
-			} while ((arg = get_arg( cfg, ARG_OPTIONAL, 0 )));
+			} while ((arg = get_arg( cfg, ARG_OPTIONAL, NULL )));
 		} else if (!strcasecmp( "RequireSSL", cfg->cmd ))
 			require_ssl = parse_bool( cfg );
 		else if (!strcasecmp( "UseIMAPS", cfg->cmd ))
@@ -3366,7 +3366,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			arg = cfg->val;
 			do
 				add_string_list( &server->auth_mechs, arg );
-			while ((arg = get_arg( cfg, ARG_OPTIONAL, 0 )));
+			while ((arg = get_arg( cfg, ARG_OPTIONAL, NULL )));
 		} else if (!strcasecmp( "RequireCRAM", cfg->cmd ))
 			require_cram = parse_bool( cfg );
 		else if (!strcasecmp( "Tunnel", cfg->cmd ))
