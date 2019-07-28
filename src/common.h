@@ -37,8 +37,8 @@ typedef unsigned long ulong;
 
 #define as(ar) (sizeof(ar)/sizeof(ar[0]))
 
-#define __stringify(x) #x
-#define stringify(x) __stringify(x)
+#define stringify__(x) #x
+#define stringify(x) stringify__(x)
 
 #define shifted_bit(in, from, to) \
 	(((uint)(in) / (from > to ? from / to : 1) * (to > from ? to / from : 1)) & to)
