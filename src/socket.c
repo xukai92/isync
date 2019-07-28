@@ -63,6 +63,34 @@ socket_fail( conn_t *conn )
 }
 
 #ifdef HAVE_LIBSSL
+static void ATTR_PRINTFLIKE(1, 2)
+print_ssl_errors( const char *fmt, ... )
+{
+	char *action;
+	va_list va;
+	ulong err;
+
+	va_start( va, fmt );
+	nfvasprintf( &action, fmt, va );
+	va_end( va );
+	while ((err = ERR_get_error()))
+		error( "Error while %s: %s\n", action, ERR_error_string( err, 0 ) );
+	free( action );
+}
+
+static int
+print_ssl_socket_errors( const char *func, conn_t *conn )
+{
+	ulong err;
+	int num = 0;
+
+	while ((err = ERR_get_error())) {
+		error( "Socket error: secure %s %s: %s\n", func, conn->name, ERR_error_string( err, 0 ) );
+		num++;
+	}
+	return num;
+}
+
 static int
 ssl_return( const char *func, conn_t *conn, int ret )
 {
@@ -76,20 +104,20 @@ ssl_return( const char *func, conn_t *conn, int ret )
 		FALLTHROUGH
 	case SSL_ERROR_WANT_READ:
 		return 0;
-	case SSL_ERROR_SYSCALL:
 	case SSL_ERROR_SSL:
-		if (!(err = ERR_get_error())) {
-			if (ret == 0) {
+		print_ssl_socket_errors( func, conn );
+		break;
+	case SSL_ERROR_SYSCALL:
+		if (print_ssl_socket_errors( func, conn ))
+			break;
+		if (ret == 0) {
 	case SSL_ERROR_ZERO_RETURN:
-				/* Callers take the short path out, so signal higher layers from here. */
-				conn->state = SCK_EOF;
-				conn->read_callback( conn->callback_aux );
-				return -1;
-			}
-			sys_error( "Socket error: secure %s %s", func, conn->name );
-		} else {
-			error( "Socket error: secure %s %s: %s\n", func, conn->name, ERR_error_string( err, 0 ) );
+			/* Callers take the short path out, so signal higher layers from here. */
+			conn->state = SCK_EOF;
+			conn->read_callback( conn->callback_aux );
+			return -1;
 		}
+		sys_error( "Socket error: secure %s %s", func, conn->name );
 		break;
 	default:
 		error( "Socket error: secure %s %s: unhandled SSL error %d\n", func, conn->name, err );
@@ -233,25 +261,24 @@ init_ssl_ctx( const server_conf_t *conf )
 	SSL_CTX_set_options( mconf->SSLContext, options );
 
 	if (conf->cert_file && !SSL_CTX_load_verify_locations( mconf->SSLContext, conf->cert_file, 0 )) {
-		error( "Error while loading certificate file '%s': %s\n",
-		       conf->cert_file, ERR_error_string( ERR_get_error(), 0 ) );
+		print_ssl_errors( "loading certificate file '%s'", conf->cert_file );
 		return 0;
 	}
 	mconf->trusted_certs = (_STACK *)sk_X509_OBJECT_dup( X509_STORE_get0_objects( SSL_CTX_get_cert_store( mconf->SSLContext ) ) );
-	if (mconf->system_certs && !SSL_CTX_set_default_verify_paths( mconf->SSLContext ))
-		warn( "Warning: Unable to load default certificate files: %s\n",
-		      ERR_error_string( ERR_get_error(), 0 ) );
+	if (mconf->system_certs && !SSL_CTX_set_default_verify_paths( mconf->SSLContext )) {
+		ulong err;
+		while ((err = ERR_get_error()))
+			warn( "Warning: Unable to load default certificate files: %s\n", ERR_error_string( err, 0 ) );
+	}
 
 	SSL_CTX_set_verify( mconf->SSLContext, SSL_VERIFY_NONE, NULL );
 
 	if (conf->client_certfile && !SSL_CTX_use_certificate_chain_file( mconf->SSLContext, conf->client_certfile)) {
-		error( "Error while loading client certificate file '%s': %s\n",
-		       conf->client_certfile, ERR_error_string( ERR_get_error(), 0 ) );
+		print_ssl_errors( "loading client certificate file '%s'", conf->client_certfile );
 		return 0;
 	}
 	if (conf->client_keyfile && !SSL_CTX_use_PrivateKey_file( mconf->SSLContext, conf->client_keyfile, SSL_FILETYPE_PEM)) {
-		error( "Error while loading client private key '%s': %s\n",
-		       conf->client_keyfile, ERR_error_string( ERR_get_error(), 0 ) );
+		print_ssl_errors( "loading client private key '%s'", conf->client_keyfile );
 		return 0;
 	}
 
