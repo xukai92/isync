@@ -545,8 +545,10 @@ static void
 socket_connected( conn_t *conn )
 {
 #ifdef HAVE_IPV6
-	freeaddrinfo( conn->addrs );
-	conn->addrs = 0;
+	if (conn->addrs) {
+		freeaddrinfo( conn->addrs );
+		conn->addrs = 0;
+	}
 #endif
 	conf_notifier( &conn->notify, 0, POLLIN );
 	socket_expect_read( conn, 0 );
