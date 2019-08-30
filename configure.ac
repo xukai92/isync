@@ -187,13 +187,6 @@ if test "x$ob_cv_with_zlib" != xno; then
   )
 fi
 
-AC_ARG_ENABLE(compat,
-  AC_HELP_STRING([--disable-compat], [don't include isync compatibility wrapper [no]]),
-  [ob_cv_enable_compat=$enableval])
-if test "x$ob_cv_enable_compat" != xno; then
-  AC_CHECK_FUNCS(getopt_long)
-fi
-AM_CONDITIONAL(with_compat, test "x$ob_cv_enable_compat" != xno -a "x$ac_cv_berkdb4" = xyes)
 AM_CONDITIONAL(with_mdconvert, test "x$ac_cv_berkdb4" = xyes)
 
 AC_CONFIG_FILES([Makefile src/Makefile isync.spec])

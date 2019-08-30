@@ -30,6 +30,6 @@ rm -rf $RPM_BUILD_ROOT%{_docdir}/%{name}
 rm -rf $RPM_BUILD_ROOT
 
 %files
-%doc AUTHORS COPYING NEWS README TODO ChangeLog src/mbsyncrc.sample src/compat/isyncrc.sample
+%doc AUTHORS COPYING NEWS README TODO ChangeLog src/mbsyncrc.sample
 %{_bindir}/*
 %{_mandir}/man1/*
