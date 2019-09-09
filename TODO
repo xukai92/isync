@@ -37,12 +37,6 @@ Patterns.
   function being missing so far
 - this is needed for move detection, which would work only within one Channel
 
-kill the concept of an INBOX, it is a relic from single-channel operation.
-if somebody needs it, he can have two stores with different Paths. the path
-can name a single (in-)box (curr. broken with maildir). an empty box name
-actually means empty, so the IMAP mailbox should use INBOX for Path (can't
-make that the default, as it would mess up the NAMESPACE).
-
 add regexp-based mailbox path rewriting to the drivers. user would provide
 expressions for both directions. every transformation would be immediately
 verified with the inverse transform. PathDelimiter and Flatten would become
