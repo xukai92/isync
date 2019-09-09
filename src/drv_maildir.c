@@ -352,6 +352,7 @@ maildir_list_maildirpp( maildir_store_t *ctx, int flags, const char *inbox )
 		} else {
 			if (!(flags & (LIST_PATH | LIST_PATH_MAYBE)))
 				continue;
+			// Explained in maildir_list_recurse().
 			if (starts_with( ent, -1, "INBOX", 5 ) && (!ent[5] || ent[5] == '.')) {
 				if (!warned) {
 					warned = 1;
@@ -437,6 +438,10 @@ maildir_list_recurse( maildir_store_t *ctx, int isBox, int flags,
 						continue;
 				}
 			}
+			// A folder named "INBOX" would be indistinguishable from the
+			// actual INBOX after prefix stripping, so drop it. This applies
+			// only to the fully uppercased spelling, as our canonical box
+			// names are case-sensitive (unlike IMAP's INBOX).
 			if (!nameLen && equals( ent, -1, "INBOX", 5 )) {
 				path[pathLen] = 0;
 				warn( "Maildir warning: ignoring INBOX in %s\n", path );

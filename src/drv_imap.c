@@ -1232,8 +1232,20 @@ parse_list_rsp_p1( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	return parse_list( ctx, cmd, parse_list_rsp_p2 );
 }
 
+// Use this to check whether a full path refers to the actual IMAP INBOX.
 static int
 is_inbox( imap_store_t *ctx, const char *arg, int argl )
+{
+	if (!starts_with_upper( arg, argl, "INBOX", 5 ))
+		return 0;
+	if (arg[5] && arg[5] != ctx->delimiter[0])
+		return 0;
+	return 1;
+}
+
+// Use this to check whether a path fragment collides with the canonical INBOX.
+static int
+is_INBOX( imap_store_t *ctx, const char *arg, int argl )
 {
 	if (!starts_with( arg, argl, "INBOX", 5 ))
 		return 0;
@@ -1256,16 +1268,22 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	}
 	arg = list->val;
 	argl = list->len;
-	if ((l = strlen( ctx->prefix ))) {
-		if (starts_with( arg, argl, ctx->prefix, l )) {
-			arg += l;
-			argl -= l;
-			if (is_inbox( ctx, arg, argl )) {
-				if (!arg[5])
-					warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
-				goto skip;
-			}
-		} else if (!is_inbox( ctx, arg, argl )) {
+	if (is_inbox( ctx, arg, argl )) {
+		// The server might be weird and have a non-uppercase INBOX. It
+		// may legitimately do so, but we need the canonical spelling.
+		memcpy( arg, "INBOX", 5 );
+	} else if ((l = strlen( ctx->prefix ))) {
+		if (!starts_with( arg, argl, ctx->prefix, l ))
+			goto skip;
+		arg += l;
+		argl -= l;
+		// A folder named "INBOX" would be indistinguishable from the
+		// actual INBOX after prefix stripping, so drop it. This applies
+		// only to the fully uppercased spelling, as our canonical box
+		// names are case-sensitive (unlike IMAP's INBOX).
+		if (is_INBOX( ctx, arg, argl )) {
+			if (!arg[5])  // No need to complain about subfolders as well.
+				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
 			goto skip;
 		}
 	}
