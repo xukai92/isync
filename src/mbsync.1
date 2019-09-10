@@ -267,7 +267,7 @@ with DOS/Windows file systems.
 .TP
 \fBSubFolders\fR \fBVerbatim\fR|\fBMaildir++\fR|\fBLegacy\fR
 The on-disk folder naming style used for hierarchical mailboxes.
-This has option has no effect when \fBFlatten\fR is used.
+This option has no effect when \fBFlatten\fR is used.
 .br
 Suppose mailboxes with the canonical paths \fBtop/sub/subsub\fR and
 \fBINBOX/sub/subsub\fR, the styles will yield the following on-disk paths:
@@ -601,12 +601,13 @@ which in turn are overridden by command line switches.
 ..
 .TP
 \fBSyncState\fR {\fB*\fR|\fIpath\fR}
-Set the location of this Channel's synchronization state files. \fB*\fR means
-that the state should be saved in a file named .mbsyncstate in the
-Slave mailbox itself; this has the advantage that you needn't to care for the
-state file if you delete the mailbox, but it works only with Maildir mailboxes,
-obviously. Otherwise this is interpreted as a string to prepend to the Slave
-mailbox name to make up a complete path.
+Set the location of this Channel's synchronization state files.
+\fB*\fR means that the state should be saved in a file named .mbsyncstate
+in the Slave mailbox itself; this has the advantage that you do not need
+to handle the state file separately if you delete the mailbox, but it works
+only with Maildir mailboxes, obviously.
+Otherwise this is interpreted as a string to prepend to the Slave mailbox
+name to make up a complete path.
 .br
 This option can be used outside any section for a global effect. In this case
 the appended string is made up according to the pattern
