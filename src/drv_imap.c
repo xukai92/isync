@@ -953,7 +953,7 @@ parse_date( const char *str )
 	struct tm datetime;
 
 	memset( &datetime, 0, sizeof(datetime) );
-	if (!(end = strptime( str, "%d-%b-%Y %H:%M:%S ", &datetime )))
+	if (!(end = strptime( str, "%e-%b-%Y %H:%M:%S ", &datetime )))
 		return -1;
 	if ((date = timegm( &datetime )) == -1)
 		return -1;
@@ -1203,17 +1203,16 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 	return RESP_OK;
 }
 
+static int parse_list_rsp_p1( imap_store_t *, list_t *, char * );
 static int parse_list_rsp_p2( imap_store_t *, list_t *, char * );
 
 static int
 parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 {
-	char *arg;
 	list_t *lp;
 
 	if (!is_list( list )) {
 		free_list( list );
-	  bad_list:
 		error( "IMAP error: malformed LIST response\n" );
 		return LIST_BAD;
 	}
@@ -1223,10 +1222,19 @@ parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 			return LIST_OK;
 		}
 	free_list( list );
-	if (!(arg = next_arg( &cmd )))
-		goto bad_list;
-	if (!ctx->delimiter[0])
-		ctx->delimiter[0] = arg[0];
+	return parse_list( ctx, cmd, parse_list_rsp_p1 );
+}
+
+static int
+parse_list_rsp_p1( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
+{
+	if (!is_opt_atom( list )) {
+		error( "IMAP error: malformed LIST response\n" );
+		free_list( list );
+		return LIST_BAD;
+	}
+	if (!ctx->delimiter[0] && is_atom( list ))
+		ctx->delimiter[0] = list->val[0];
 	return parse_list( ctx, cmd, parse_list_rsp_p2 );
 }
 
@@ -1873,7 +1881,7 @@ ensure_password( imap_server_conf_t *srvc )
 	if (cmd) {
 		FILE *fp;
 		int ret;
-		char buffer[80];
+		char buffer[2048];  // Hopefully more than enough room for XOAUTH2, etc. tokens
 
 		if (*cmd == '+') {
 			flushn();
@@ -2079,7 +2087,7 @@ done_sasl_auth( imap_store_t *ctx, imap_cmd_t *cmd ATTR_UNUSED, int response )
 		int rc = sasl_client_step( ctx->sasl, NULL, 0, &interact, &out, &out_len );
 		if (process_sasl_step( ctx, rc, NULL, 0, interact, &out, &out_len ) < 0)
 			warn( "Warning: SASL reported failure despite successful IMAP authentication. Ignoring...\n" );
-		else if (out)
+		else if (out_len > 0)
 			warn( "Warning: SASL wants more steps despite successful IMAP authentication. Ignoring...\n" );
 	}
 
@@ -2180,7 +2188,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		free( enc );
 		return;
 	  notsasl:
-		if (!ctx->sasl || sasl_listmech( ctx->sasl, NULL, "", "", "", &saslavail, NULL, NULL ) != SASL_OK)
+		if (!ctx->sasl || sasl_listmech( ctx->sasl, NULL, "", " ", "", &saslavail, NULL, NULL ) != SASL_OK)
 			saslavail = "(none)";  /* EXTERNAL is always there anyway. */
 		if (!auth_login) {
 			error( "IMAP error: selected SASL mechanism(s) not available;\n"

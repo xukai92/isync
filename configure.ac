@@ -18,14 +18,14 @@ fi
 
 need_perl=5.14
 AC_CACHE_CHECK([whether perl is recent enough], ob_cv_perl_ver, [
-    if $PERL -e "use v$need_perl;"; then
+    if $PERL -e "use v$need_perl;" 2> /dev/null; then
         ob_cv_perl_ver=yes
     else
         ob_cv_perl_ver=no
     fi
 ])
 if test "x$ob_cv_perl_ver" = "xno"; then
-    AC_MSG_ERROR([perl is too old])
+    AC_MSG_ERROR([perl is too old, need v$need_perl])
 fi
 
 AC_CACHE_CHECK([whether strftime supports %z], ob_cv_strftime_z,
@@ -94,7 +94,7 @@ if test "x$ob_cv_with_ssl" != xno; then
     sav_LDFLAGS=$LDFLAGS
     LDFLAGS="$LDFLAGS $SSL_LDFLAGS"
     AC_CHECK_LIB(dl, dlopen, [LIBDL=-ldl])
-    AC_CHECK_LIB(crypto, CRYPTO_lock, [LIBCRYPTO=-lcrypto])
+    AC_CHECK_LIB(crypto, X509_cmp, [LIBCRYPTO=-lcrypto])
     AC_CHECK_LIB(ssl, SSL_connect,
                  [SSL_LIBS="-lssl $LIBCRYPTO $LIBDL" have_ssl_paths=yes])
     LDFLAGS=$sav_LDFLAGS
