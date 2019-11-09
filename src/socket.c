@@ -263,6 +263,11 @@ init_ssl_ctx( const server_conf_t *conf )
 
 	SSL_CTX_set_options( mconf->SSLContext, options );
 
+	if (conf->cipher_string && !SSL_CTX_set_cipher_list( mconf->SSLContext, conf->cipher_string )) {
+		print_ssl_errors( "setting cipher string '%s'", conf->cipher_string );
+		return 0;
+	}
+
 	if (conf->cert_file && !SSL_CTX_load_verify_locations( mconf->SSLContext, conf->cert_file, 0 )) {
 		print_ssl_errors( "loading certificate file '%s'", conf->cert_file );
 		return 0;

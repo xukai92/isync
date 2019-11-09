@@ -3295,6 +3295,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				           cfg->file, cfg->line, server->sconf.client_keyfile );
 				cfg->err = 1;
 			}
+		} else if (!strcasecmp( "CipherString", cfg->cmd )) {
+			server->sconf.cipher_string = nfstrdup( cfg->val );
 		} else if (!strcasecmp( "SSLType", cfg->cmd )) {
 			if (!strcasecmp( "None", cfg->val )) {
 				server->ssl_type = SSL_None;

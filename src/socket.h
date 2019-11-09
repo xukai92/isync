@@ -49,6 +49,7 @@ typedef struct {
 	char *cert_file;
 	char *client_certfile;
 	char *client_keyfile;
+	char *cipher_string;
 	char system_certs;
 	char ssl_versions;
 

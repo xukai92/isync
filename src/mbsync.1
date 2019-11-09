@@ -414,6 +414,13 @@ so it is unlikely that you need this option.
 File containing the private key corresponding to \fBClientCertificate\fR.
 .
 .TP
+\fBCipherString\fR \fIstring\fR
+Specify OpenSSL cipher string for connections secured with TLS up to
+version 1.2 (but not 1.3 and above).
+The format is described in \fBciphers\fR\|(1).
+(Default: empty, which implies system wide policy).
+.
+.TP
 \fBPipelineDepth\fR \fIdepth\fR
 Maximum number of IMAP commands which can be simultaneously in flight.
 Setting this to \fI1\fR disables pipelining.
