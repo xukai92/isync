@@ -108,7 +108,7 @@ struct imap_store {
 	uint got_namespace:1;
 	uint has_forwarded:1;
 	char delimiter[2]; /* hierarchy delimiter */
-	list_t *ns_personal, *ns_other, *ns_shared; /* NAMESPACE info */
+	list_t *ns_personal; /* NAMESPACE info */
 	string_list_t *boxes; // _list results
 	char listed; // was _list already run with these flags?
 	// note that the message counts do _not_ reflect stats from msgs,
@@ -936,16 +936,14 @@ parse_namespace_rsp( imap_store_t *ctx, list_t *list, char *s )
 static int
 parse_namespace_rsp_p2( imap_store_t *ctx, list_t *list, char *s )
 {
-	if (parse_namespace_check( (ctx->ns_other = list) ))
-		return LIST_BAD;
+	free_list( list );
 	return parse_list( ctx, s, parse_namespace_rsp_p3 );
 }
 
 static int
-parse_namespace_rsp_p3( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
+parse_namespace_rsp_p3( imap_store_t *ctx ATTR_UNUSED, list_t *list, char *s ATTR_UNUSED )
 {
-	if (parse_namespace_check( (ctx->ns_shared = list) ))
-		return LIST_BAD;
+	free_list( list );
 	return LIST_OK;
 }
 
@@ -1611,8 +1609,6 @@ imap_cancel_store( store_t *gctx )
 	cancel_sent_imap_cmds( ctx );
 	cancel_pending_imap_cmds( ctx );
 	free_list( ctx->ns_personal );
-	free_list( ctx->ns_other );
-	free_list( ctx->ns_shared );
 	free_string_list( ctx->auth_mechs );
 	free_generic_messages( ctx->msgs );
 	free_string_list( ctx->boxes );
