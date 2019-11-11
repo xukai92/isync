@@ -108,7 +108,7 @@ struct imap_store {
 	uint got_namespace:1;
 	uint has_forwarded:1;
 	char delimiter[2]; /* hierarchy delimiter */
-	list_t *ns_personal; /* NAMESPACE info */
+	char *ns_prefix, ns_delimiter; /* NAMESPACE info */
 	string_list_t *boxes; // _list results
 	char listed; // was _list already run with these flags?
 	// note that the message counts do _not_ reflect stats from msgs,
@@ -902,34 +902,37 @@ static int parse_namespace_rsp_p2( imap_store_t *, list_t *, char * );
 static int parse_namespace_rsp_p3( imap_store_t *, list_t *, char * );
 
 static int
-parse_namespace_check( list_t *list )
-{
-	if (!list)
-		goto bad;
-	if (list->val == NIL)
-		return 0;
-	if (list->val != LIST)
-		goto bad;
-	for (list = list->child; list; list = list->next) {
-		if (list->val != LIST)
-			goto bad;
-		if (!is_atom( list->child ))
-			goto bad;
-		if (!is_opt_atom( list->child->next ))
-			goto bad;
-		/* Namespace response extensions may follow here; we don't care. */
-	}
-	return 0;
-  bad:
-	error( "IMAP error: malformed NAMESPACE response\n" );
-	return -1;
-}
-
-static int
 parse_namespace_rsp( imap_store_t *ctx, list_t *list, char *s )
 {
-	if (parse_namespace_check( (ctx->ns_personal = list) ))
+	// We use only the 1st personal namespace. Making this configurable
+	// would not add value over just specifying Path.
+
+	if (!list) {
+	  bad:
+		error( "IMAP error: malformed NAMESPACE response\n" );
+		free_list( list );
 		return LIST_BAD;
+	}
+	if (list->val != NIL) {
+		if (list->val != LIST)
+			goto bad;
+		list_t *nsp_1st = list->child;
+		if (nsp_1st->val != LIST)
+			goto bad;
+		list_t *nsp_1st_ns = nsp_1st->child;
+		if (!is_atom( nsp_1st_ns ))
+			goto bad;
+		ctx->ns_prefix = nsp_1st_ns->val;
+		nsp_1st_ns->val = NULL;
+		list_t *nsp_1st_dl = nsp_1st_ns->next;
+		if (!is_opt_atom( nsp_1st_dl ))
+			goto bad;
+		if (is_atom( nsp_1st_dl ))
+			ctx->ns_delimiter = nsp_1st_dl->val[0];
+		// Namespace response extensions may follow here; we don't care.
+	}
+	free_list( list );
+
 	return parse_list( ctx, s, parse_namespace_rsp_p2 );
 }
 
@@ -1608,7 +1611,7 @@ imap_cancel_store( store_t *gctx )
 	socket_close( &ctx->conn );
 	cancel_sent_imap_cmds( ctx );
 	cancel_pending_imap_cmds( ctx );
-	free_list( ctx->ns_personal );
+	free( ctx->ns_prefix );
 	free_string_list( ctx->auth_mechs );
 	free_generic_messages( ctx->msgs );
 	free_string_list( ctx->boxes );
@@ -2335,19 +2338,11 @@ static void
 imap_open_store_namespace2( imap_store_t *ctx )
 {
 	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
-	list_t *nsp, *nsp_1st;
 
-	/* XXX for now assume 1st personal namespace */
-	if (is_list( (nsp = ctx->ns_personal) ) &&
-	    is_list( (nsp_1st = nsp->child) ))
-	{
-		list_t *nsp_1st_ns = nsp_1st->child;
-		list_t *nsp_1st_dl = nsp_1st_ns->next;
-		if (!ctx->prefix && cfg->use_namespace)
-			ctx->prefix = nsp_1st_ns->val;
-		if (!ctx->delimiter[0] && is_atom( nsp_1st_dl ))
-			ctx->delimiter[0] = nsp_1st_dl->val[0];
-	}
+	if (!ctx->prefix && cfg->use_namespace)
+		ctx->prefix = ctx->ns_prefix;
+	if (!ctx->delimiter[0])
+		ctx->delimiter[0] = ctx->ns_delimiter;
 	imap_open_store_finalize( ctx );
 }
 
