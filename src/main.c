@@ -973,7 +973,10 @@ sync_chans( main_vars_t *mvars, int ent )
 			chans_done++;
 			stats();
 		}
-	} while ((mvars->chanptr = mvars->chanptr->next));
+		chan_ent_t *nchan = mvars->chanptr->next;
+		free( mvars->chanptr );
+		mvars->chanptr = nchan;
+	} while (mvars->chanptr);
 	for (t = 0; t < N_DRIVERS; t++)
 		drivers[t]->cleanup();
 }
