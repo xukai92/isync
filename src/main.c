@@ -959,7 +959,7 @@ sync_chans( main_vars_t *mvars, int ent )
 			mvars->skip = 1;
 			return;
 		}
-		if (mvars->chanptr->boxlist == 2) {
+		if (mvars->chanptr->boxlist) {
 			for (nmbox = mvars->chanptr->boxes; (mbox = nmbox); ) {
 				nmbox = mbox->next;
 				free( mbox->name );
