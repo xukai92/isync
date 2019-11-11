@@ -968,8 +968,8 @@ parse_date( const char *str )
 static int
 parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
-	list_t *tmp, *flags;
-	char *body = NULL, *tuid = NULL, *msgid = NULL, *ep;
+	list_t *body = NULL, *tmp, *flags;
+	char *tuid = NULL, *msgid = NULL, *ep;
 	imap_message_t *cur;
 	msg_data_t *msgdata;
 	imap_cmd_t *cmdp;
@@ -986,8 +986,10 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		if (is_atom( tmp )) {
 			if (!strcmp( "UID", tmp->val )) {
 				tmp = tmp->next;
-				if (!is_atom( tmp ) || (uid = strtoul( tmp->val, &ep, 10 ), *ep))
+				if (!is_atom( tmp ) || (uid = strtoul( tmp->val, &ep, 10 ), *ep)) {
 					error( "IMAP error: unable to parse UID\n" );
+					goto ffail;
+				}
 			} else if (!strcmp( "FLAGS", tmp->val )) {
 				tmp = tmp->next;
 				if (is_list( tmp )) {
@@ -1007,34 +1009,44 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 									goto flagok; /* ignore unknown user-defined flags (keywords) */
 								if (flags->val[0] == '\\' && flags->val[1] == 'X' && flags->val[2] == '-')
 									goto flagok; /* ignore system flag extensions */
-								error( "IMAP warning: unknown system flag %s\n", flags->val );
+								warn( "IMAP warning: unknown system flag %s\n", flags->val );
 							}
 						  flagok: ;
-						} else
+						} else {
 							error( "IMAP error: unable to parse FLAGS list\n" );
+							goto ffail;
+						}
 					}
 					status |= M_FLAGS;
-				} else
+				} else {
 					error( "IMAP error: unable to parse FLAGS\n" );
+					goto ffail;
+				}
 			} else if (!strcmp( "INTERNALDATE", tmp->val )) {
 				tmp = tmp->next;
 				if (is_atom( tmp )) {
-					if ((date = parse_date( tmp->val )) == -1)
+					if ((date = parse_date( tmp->val )) == -1) {
 						error( "IMAP error: unable to parse INTERNALDATE format\n" );
-				} else
+						goto ffail;
+					}
+				} else {
 					error( "IMAP error: unable to parse INTERNALDATE\n" );
+					goto ffail;
+				}
 			} else if (!strcmp( "RFC822.SIZE", tmp->val )) {
 				tmp = tmp->next;
-				if (!is_atom( tmp ) || (size = strtoul( tmp->val, &ep, 10 ), *ep))
+				if (!is_atom( tmp ) || (size = strtoul( tmp->val, &ep, 10 ), *ep)) {
 					error( "IMAP error: unable to parse RFC822.SIZE\n" );
+					goto ffail;
+				}
 			} else if (!strcmp( "BODY[]", tmp->val )) {
 				tmp = tmp->next;
 				if (is_atom( tmp )) {
-					body = tmp->val;
-					tmp->val = NULL;       /* don't free together with list */
-					size = tmp->len;
-				} else
+					body = tmp;
+				} else {
 					error( "IMAP error: unable to parse BODY[]\n" );
+					goto ffail;
+				}
 			} else if (!strcmp( "BODY[HEADER.FIELDS", tmp->val )) {
 				tmp = tmp->next;
 				if (is_list( tmp )) {
@@ -1053,7 +1065,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 							break;
 						if (starts_with_upper( val, len, "X-TUID: ", 8 )) {
 							if (len < 8 + TUIDL) {
-								error( "IMAP error: malformed X-TUID header (UID %u)\n", uid );
+								warn( "IMAP warning: malformed X-TUID header (UID %u)\n", uid );
 								continue;
 							}
 							tuid = val + 8;
@@ -1083,6 +1095,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 				} else {
 				  bfail:
 					error( "IMAP error: unable to parse BODY[HEADER.FIELDS ...]\n" );
+					goto ffail;
 				}
 			}
 		}
@@ -1104,8 +1117,9 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		return LIST_BAD;
 	  gotuid:
 		msgdata = ((imap_cmd_fetch_msg_t *)cmdp)->msg_data;
-		msgdata->data = body;
-		msgdata->len = size;
+		msgdata->data = body->val;
+		body->val = NULL;       // Don't free together with list.
+		msgdata->len = body->len;
 		msgdata->date = date;
 		if (status & M_FLAGS)
 			msgdata->flags = mask;
@@ -1127,6 +1141,11 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	}
 
 	return LIST_OK;
+
+  ffail:
+	free( tuid );
+	free( msgid );
+	return LIST_BAD;
 }
 
 static void
