@@ -974,7 +974,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	msg_data_t *msgdata;
 	imap_cmd_t *cmdp;
 	uchar mask = 0, status = 0;
-	uint i, uid = 0, size = 0;
+	uint i, uid = 0, need_uid = 0, size = 0;
 	time_t date = 0;
 
 	if (!is_list( list )) {
@@ -990,6 +990,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 					error( "IMAP error: unable to parse UID\n" );
 					goto ffail;
 				}
+				continue;  // This *is* the UID.
 			} else if (!strcmp( "FLAGS", tmp->val )) {
 				tmp = tmp->next;
 				if (is_list( tmp )) {
@@ -1018,6 +1019,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 						}
 					}
 					status |= M_FLAGS;
+					continue;  // This may legitimately come without UID.
 				} else {
 					error( "IMAP error: unable to parse FLAGS\n" );
 					goto ffail;
@@ -1099,17 +1101,27 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 				}
 			}
 		}
+		need_uid = 1;
 	}
 
 	if (!uid) {
-		assert( !body && !tuid && !msgid );
+		if (need_uid) {
+			error( "IMAP error: received payload without UID\n" );
+			goto ffail;
+		}
 		// Ignore async flag updates for now.
 	} else if ((cmdp = ctx->in_progress) && cmdp->param.lastuid) {
-		assert( !body && !tuid && !msgid );
+		if (need_uid || (status & M_FLAGS)) {
+			error( "IMAP error: received extraneous data in response to UID query\n" );
+			goto ffail;
+		}
 		// Workaround for server not sending UIDNEXT and/or APPENDUID.
 		ctx->uidnext = uid + 1;
 	} else if (body) {
-		assert( !tuid && !msgid );
+		if (tuid || msgid) {  // Only those that leak; ignore others.
+			error( "IMAP error: received extraneous data with full message\n" );
+			goto ffail;
+		}
 		for (cmdp = ctx->in_progress; cmdp; cmdp = cmdp->next)
 			if (cmdp->param.uid == uid)
 				goto gotuid;
