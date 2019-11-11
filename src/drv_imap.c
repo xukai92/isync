@@ -965,6 +965,37 @@ parse_date( const char *str )
 	return date - (hours * 60 + mins) * 60;
 }
 
+static int
+parse_fetched_flags( list_t *list, uchar *flags, uchar *status )
+{
+	for (; list; list = list->next) {
+		if (!is_atom( list )) {
+			error( "IMAP error: unable to parse FLAGS list\n" );
+			return 0;
+		}
+		if (list->val[0] != '\\' && list->val[0] != '$')
+			continue;
+		if (!strcmp( "\\Recent", list->val )) {
+			*status |= M_RECENT;
+			goto flagok;
+		}
+		for (uint i = 0; i < as(Flags); i++) {
+			if (!strcmp( Flags[i], list->val )) {
+				*flags |= 1 << i;
+				goto flagok;
+			}
+		}
+		if (list->val[0] == '$')
+			goto flagok; // Ignore unknown user-defined flags (keywords)
+		if (list->val[1] == 'X' && list->val[2] == '-')
+			goto flagok; // Ignore system flag extensions
+		warn( "IMAP warning: unknown system flag %s\n", list->val );
+	  flagok: ;
+	}
+	*status |= M_FLAGS;
+	return 1;
+}
+
 static void
 parse_fetched_header( char *val, uint uid, char **tuid, char **msgid )
 {
@@ -1010,13 +1041,13 @@ parse_fetched_header( char *val, uint uid, char **tuid, char **msgid )
 static int
 parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
-	list_t *body = NULL, *tmp, *flags;
+	list_t *body = NULL, *tmp;
 	char *tuid = NULL, *msgid = NULL, *ep;
 	imap_message_t *cur;
 	msg_data_t *msgdata;
 	imap_cmd_t *cmdp;
 	uchar mask = 0, status = 0;
-	uint i, uid = 0, need_uid = 0, size = 0;
+	uint uid = 0, need_uid = 0, size = 0;
 	time_t date = 0;
 
 	if (!is_list( list )) {
@@ -1036,31 +1067,8 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			} else if (!strcmp( "FLAGS", tmp->val )) {
 				tmp = tmp->next;
 				if (is_list( tmp )) {
-					for (flags = tmp->child; flags; flags = flags->next) {
-						if (is_atom( flags )) {
-							if (flags->val[0] == '\\' || flags->val[0] == '$') {
-								if (!strcmp( "\\Recent", flags->val)) {
-									status |= M_RECENT;
-									goto flagok;
-								}
-								for (i = 0; i < as(Flags); i++)
-									if (!strcmp( Flags[i], flags->val)) {
-										mask |= 1 << i;
-										goto flagok;
-									}
-								if (flags->val[0] == '$')
-									goto flagok; /* ignore unknown user-defined flags (keywords) */
-								if (flags->val[0] == '\\' && flags->val[1] == 'X' && flags->val[2] == '-')
-									goto flagok; /* ignore system flag extensions */
-								warn( "IMAP warning: unknown system flag %s\n", flags->val );
-							}
-						  flagok: ;
-						} else {
-							error( "IMAP error: unable to parse FLAGS list\n" );
-							goto ffail;
-						}
-					}
-					status |= M_FLAGS;
+					if (!parse_fetched_flags( tmp->child, &mask, &status ))
+						goto ffail;
 					continue;  // This may legitimately come without UID.
 				} else {
 					error( "IMAP error: unable to parse FLAGS\n" );
