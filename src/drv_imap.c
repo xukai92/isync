@@ -886,6 +886,7 @@ parse_list_continue( imap_store_t *ctx, char *s )
 		list = (resp == LIST_BAD) ? NULL : ctx->parse_list_sts.head;
 		ctx->parse_list_sts.head = NULL;
 		resp = ctx->parse_list_sts.callback( ctx, list, s );
+		free_list( list );
 	}
 	return resp;
 }
@@ -910,7 +911,6 @@ parse_namespace_rsp( imap_store_t *ctx, list_t *list, char *s )
 	if (!list) {
 	  bad:
 		error( "IMAP error: malformed NAMESPACE response\n" );
-		free_list( list );
 		return LIST_BAD;
 	}
 	if (list->val != NIL) {
@@ -931,22 +931,19 @@ parse_namespace_rsp( imap_store_t *ctx, list_t *list, char *s )
 			ctx->ns_delimiter = nsp_1st_dl->val[0];
 		// Namespace response extensions may follow here; we don't care.
 	}
-	free_list( list );
 
 	return parse_list( ctx, s, parse_namespace_rsp_p2 );
 }
 
 static int
-parse_namespace_rsp_p2( imap_store_t *ctx, list_t *list, char *s )
+parse_namespace_rsp_p2( imap_store_t *ctx, list_t *list ATTR_UNUSED, char *s )
 {
-	free_list( list );
 	return parse_list( ctx, s, parse_namespace_rsp_p3 );
 }
 
 static int
-parse_namespace_rsp_p3( imap_store_t *ctx ATTR_UNUSED, list_t *list, char *s ATTR_UNUSED )
+parse_namespace_rsp_p3( imap_store_t *ctx ATTR_UNUSED, list_t *list ATTR_UNUSED, char *s ATTR_UNUSED )
 {
-	free_list( list );
 	return LIST_OK;
 }
 
@@ -982,7 +979,6 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 
 	if (!is_list( list )) {
 		error( "IMAP error: bogus FETCH response\n" );
-		free_list( list );
 		return LIST_BAD;
 	}
 
@@ -1105,7 +1101,6 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			if (cmdp->param.uid == uid)
 				goto gotuid;
 		error( "IMAP error: unexpected FETCH response (UID %u)\n", uid );
-		free_list( list );
 		return LIST_BAD;
 	  gotuid:
 		msgdata = ((imap_cmd_fetch_msg_t *)cmdp)->msg_data;
@@ -1131,7 +1126,6 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			cur->gen.tuid[0] = 0;
 	}
 
-	free_list( list );
 	return LIST_OK;
 }
 
@@ -1239,16 +1233,12 @@ parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 	list_t *lp;
 
 	if (!is_list( list )) {
-		free_list( list );
 		error( "IMAP error: malformed LIST response\n" );
 		return LIST_BAD;
 	}
 	for (lp = list->child; lp; lp = lp->next)
-		if (is_atom( lp ) && !strcasecmp( lp->val, "\\NoSelect" )) {
-			free_list( list );
+		if (is_atom( lp ) && !strcasecmp( lp->val, "\\NoSelect" ))
 			return LIST_OK;
-		}
-	free_list( list );
 	return parse_list( ctx, cmd, parse_list_rsp_p1 );
 }
 
@@ -1257,7 +1247,6 @@ parse_list_rsp_p1( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 {
 	if (!is_opt_atom( list )) {
 		error( "IMAP error: malformed LIST response\n" );
-		free_list( list );
 		return LIST_BAD;
 	}
 	if (!ctx->delimiter[0] && is_atom( list ))
@@ -1297,7 +1286,6 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 
 	if (!is_atom( list )) {
 		error( "IMAP error: malformed LIST response\n" );
-		free_list( list );
 		return LIST_BAD;
 	}
 	arg = list->val;
@@ -1308,7 +1296,7 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 		memcpy( arg, "INBOX", 5 );
 	} else if ((l = strlen( ctx->prefix ))) {
 		if (!starts_with( arg, argl, ctx->prefix, l ))
-			goto skip;
+			return LIST_OK;
 		arg += l;
 		argl -= l;
 		// A folder named "INBOX" would be indistinguishable from the
@@ -1318,19 +1306,17 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 		if (is_INBOX( ctx, arg, argl )) {
 			if (!arg[5])  // No need to complain about subfolders as well.
 				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
-			goto skip;
+			return LIST_OK;
 		}
 	}
 	if (argl >= 5 && !memcmp( arg + argl - 5, ".lock", 5 )) /* workaround broken servers */
-		goto skip;
+		return LIST_OK;
 	if (map_name( arg, (char **)&narg, offsetof(string_list_t, string), ctx->delimiter, "/") < 0) {
 		warn( "IMAP warning: ignoring mailbox %s (reserved character '/' in name)\n", arg );
-		goto skip;
+		return LIST_OK;
 	}
 	narg->next = ctx->boxes;
 	ctx->boxes = narg;
-  skip:
-	free_list( list );
 	return LIST_OK;
 }
 
