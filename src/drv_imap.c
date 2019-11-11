@@ -965,6 +965,48 @@ parse_date( const char *str )
 	return date - (hours * 60 + mins) * 60;
 }
 
+static void
+parse_fetched_header( char *val, uint uid, char **tuid, char **msgid )
+{
+	char *end;
+	int off, in_msgid = 0;
+	for (; (end = strchr( val, '\n' )); val = end + 1) {
+		int len = (int)(end - val);
+		if (len && end[-1] == '\r')
+			len--;
+		if (!len)
+			break;
+		if (starts_with_upper( val, len, "X-TUID: ", 8 )) {
+			if (len < 8 + TUIDL) {
+				warn( "IMAP warning: malformed X-TUID header (UID %u)\n", uid );
+				continue;
+			}
+			*tuid = val + 8;
+			in_msgid = 0;
+			continue;
+		}
+		if (starts_with_upper( val, len, "MESSAGE-ID:", 11 )) {
+			off = 11;
+		} else if (in_msgid) {
+			if (!isspace( val[0] )) {
+				in_msgid = 0;
+				continue;
+			}
+			off = 1;
+		} else {
+			continue;
+		}
+		while (off < len && isspace( val[off] ))
+			off++;
+		if (off == len) {
+			in_msgid = 1;
+			continue;
+		}
+		*msgid = nfstrndup( val + off, (size_t)(len - off) );
+		in_msgid = 0;
+	}
+}
+
 static int
 parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
@@ -1058,42 +1100,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 					tmp = tmp->next;
 					if (!is_atom( tmp ))
 						goto bfail;
-					int off, in_msgid = 0;
-					for (char *val = tmp->val, *end; (end = strchr( val, '\n' )); val = end + 1) {
-						int len = (int)(end - val);
-						if (len && end[-1] == '\r')
-							len--;
-						if (!len)
-							break;
-						if (starts_with_upper( val, len, "X-TUID: ", 8 )) {
-							if (len < 8 + TUIDL) {
-								warn( "IMAP warning: malformed X-TUID header (UID %u)\n", uid );
-								continue;
-							}
-							tuid = val + 8;
-							in_msgid = 0;
-							continue;
-						}
-						if (starts_with_upper( val, len, "MESSAGE-ID:", 11 )) {
-							off = 11;
-						} else if (in_msgid) {
-							if (!isspace( val[0] )) {
-								in_msgid = 0;
-								continue;
-							}
-							off = 1;
-						} else {
-							continue;
-						}
-						while (off < len && isspace( val[off] ))
-							off++;
-						if (off == len) {
-							in_msgid = 1;
-							continue;
-						}
-						msgid = nfstrndup( val + off, (size_t)(len - off) );
-						in_msgid = 0;
-					}
+					parse_fetched_header( tmp->val, uid, &tuid, &msgid );
 				} else {
 				  bfail:
 					error( "IMAP error: unable to parse BODY[HEADER.FIELDS ...]\n" );
