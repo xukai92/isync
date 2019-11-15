@@ -646,10 +646,10 @@ maildir_validate( const char *box, int create, maildir_store_t *ctx )
 
 #ifdef USE_DB
 static void
-make_key( const char *info_stop, DBT *tkey, char *name )
+make_key( const char *info_stop, DBT *tkey, const char *name )
 {
 	char *u = strpbrk( name, info_stop );
-	tkey->data = name;
+	tkey->data = (char *)name;
 	tkey->size = u ? (size_t)(u - name) : strlen( name );
 }
 #endif /* USE_DB */
@@ -830,7 +830,7 @@ maildir_set_uid( maildir_store_t *ctx, const char *name, uint *uid )
 		return ret;
 	*uid = ++ctx->nuid;
 
-	make_key( ((maildir_store_conf_t *)ctx->gen.conf)->info_stop, &key, (char *)name );
+	make_key( ((maildir_store_conf_t *)ctx->gen.conf)->info_stop, &key, name );
 	value.data = uid;
 	value.size = sizeof(*uid);
 	if ((ret = ctx->db->put( ctx->db, 0, &key, &value, 0 ))) {
@@ -1737,7 +1737,7 @@ maildir_purge_msg( maildir_store_t *ctx, const char *name )
 
 	if ((ret = maildir_uidval_lock( ctx )) != DRV_OK)
 		return ret;
-	make_key( ((maildir_store_conf_t *)ctx->gen.conf)->info_stop, &key, (char *)name );
+	make_key( ((maildir_store_conf_t *)ctx->gen.conf)->info_stop, &key, name );
 	if ((ret = ctx->db->del( ctx->db, 0, &key, 0 ))) {
 		ctx->db->err( ctx->db, ret, "Maildir error: db->del()" );
 		return DRV_BOX_BAD;
