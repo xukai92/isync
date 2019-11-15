@@ -47,12 +47,10 @@ typedef unsigned long ulong;
 # define ATTR_UNUSED __attribute__((unused))
 # define ATTR_NORETURN __attribute__((noreturn))
 # define ATTR_PRINTFLIKE(fmt,var) __attribute__((format(printf,fmt,var)))
-# define ATTR_PACKED(ref) __attribute__((packed,aligned(sizeof(ref))))
 #else
 # define ATTR_UNUSED
 # define ATTR_NORETURN
 # define ATTR_PRINTFLIKE(fmt,var)
-# define ATTR_PACKED(ref)
 #endif
 
 #if defined(__clang__)
@@ -137,7 +135,7 @@ void flushn( void );
 typedef struct string_list {
 	struct string_list *next;
 	char string[1];
-} ATTR_PACKED(void *) string_list_t;
+} string_list_t;
 
 void add_string_list_n( string_list_t **list, const char *str, uint len );
 void add_string_list( string_list_t **list, const char *str );
@@ -176,22 +174,26 @@ int map_name( const char *arg, char **result, uint reserve, const char *in, cons
 	typedef struct { \
 		T *data; \
 		uint size; \
-	} ATTR_PACKED(T *) T##_array_t; \
-	typedef struct { \
+	} T##_array_t; \
+	typedef union { \
 		T##_array_t array; \
-		uint alloc; \
-	} ATTR_PACKED(T *) T##_array_alloc_t; \
+		struct { \
+			T *dummy_data; \
+			uint dummy_size; \
+			uint alloc; \
+		} extra; \
+	} T##_array_alloc_t; \
 	static INLINE T *T##_array_append( T##_array_alloc_t *arr ) \
 	{ \
-		if (arr->array.size == arr->alloc) { \
-			arr->alloc = arr->alloc * 2 + 100; \
-			arr->array.data = nfrealloc( arr->array.data, arr->alloc * sizeof(T) ); \
+		if (arr->array.size == arr->extra.alloc) { \
+			arr->extra.alloc = arr->extra.alloc * 2 + 100; \
+			arr->array.data = nfrealloc( arr->array.data, arr->extra.alloc * sizeof(T) ); \
 		} \
 		return &arr->array.data[arr->array.size++]; \
 	}
 
 #define ARRAY_INIT(arr) \
-	do { (arr)->array.data = NULL; (arr)->array.size = (arr)->alloc = 0; } while (0)
+	do { (arr)->array.data = NULL; (arr)->array.size = (arr)->extra.alloc = 0; } while (0)
 
 #define ARRAY_SQUEEZE(arr) \
 	do { \

@@ -23,6 +23,7 @@
 #include "common.h"
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -174,7 +175,7 @@ add_string_list_n( string_list_t **list, const char *str, uint len )
 {
 	string_list_t *elem;
 
-	elem = nfmalloc( sizeof(*elem) + len );
+	elem = nfmalloc( offsetof(string_list_t, string) + len + 1 );
 	elem->next = *list;
 	*list = elem;
 	memcpy( elem->string, str, len );
