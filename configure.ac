@@ -6,7 +6,16 @@ AM_MAINTAINER_MODE
 
 AC_PROG_CC_C99
 if test "$GCC" = yes; then
-    CFLAGS="$CFLAGS -pipe -W -Wall -Wshadow -Wstrict-prototypes -std=c99 -pedantic -Wno-overlength-strings"
+    warnings="
+        -Wall -Wextra
+        -Wshadow
+        -Wcast-qual
+        -Wformat=2 -Wformat-signedness -Wformat-nonliteral
+        -Wstrict-prototypes
+
+        -Wno-overlength-strings
+    "
+    CFLAGS="$CFLAGS -pipe -std=c99 -pedantic $(echo $warnings)"
 fi
 
 CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE"
