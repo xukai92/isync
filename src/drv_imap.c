@@ -345,7 +345,7 @@ send_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd )
 	*ctx->in_progress_append = cmd;
 	ctx->in_progress_append = &cmd->next;
 	ctx->num_in_progress++;
-	socket_expect_read( &ctx->conn, 1 );
+	socket_expect_activity( &ctx->conn, 1 );
 }
 
 static int
@@ -409,7 +409,7 @@ cancel_sent_imap_cmds( imap_store_t *ctx )
 {
 	imap_cmd_t *cmd;
 
-	socket_expect_read( &ctx->conn, 0 );
+	socket_expect_activity( &ctx->conn, 0 );
 	while ((cmd = ctx->in_progress)) {
 		ctx->in_progress = cmd->next;
 		/* don't update num_in_progress and in_progress_append - store is dead */
@@ -1469,7 +1469,7 @@ imap_socket_read( void *aux )
 			error( "IMAP error: unexpected reply: %s %s\n", arg, cmd ? cmd : "" );
 			break; /* this may mean anything, so prefer not to spam the log */
 		} else if (*arg == '+') {
-			socket_expect_read( &ctx->conn, 0 );
+			socket_expect_activity( &ctx->conn, 0 );
 			/* There can be any number of commands in flight, but only the last
 			 * one can require a continuation, as it enforces a round-trip. */
 			cmdp = (imap_cmd_t *)((char *)ctx->in_progress_append -
@@ -1499,7 +1499,7 @@ imap_socket_read( void *aux )
 				error( "IMAP error: unexpected command continuation request\n" );
 				break;
 			}
-			socket_expect_read( &ctx->conn, 1 );
+			socket_expect_activity( &ctx->conn, 1 );
 		} else {
 			tag = atoi( arg );
 			for (pcmdp = &ctx->in_progress; (cmdp = *pcmdp); pcmdp = &cmdp->next)
@@ -1511,7 +1511,7 @@ imap_socket_read( void *aux )
 			if (!(*pcmdp = cmdp->next))
 				ctx->in_progress_append = pcmdp;
 			if (!--ctx->num_in_progress)
-				socket_expect_read( &ctx->conn, 0 );
+				socket_expect_activity( &ctx->conn, 0 );
 			arg = next_arg( &cmd );
 			if (!arg) {
 				error( "IMAP error: malformed tagged response\n" );
@@ -1798,7 +1798,7 @@ imap_open_store_connected( int ok, void *aux )
 		socket_start_tls( &ctx->conn, imap_open_store_tlsstarted1 );
 #endif
 	else
-		socket_expect_read( &ctx->conn, 1 );
+		socket_expect_activity( &ctx->conn, 1 );
 }
 
 #ifdef HAVE_LIBSSL
@@ -1810,14 +1810,14 @@ imap_open_store_tlsstarted1( int ok, void *aux )
 	if (!ok)
 		imap_open_store_ssl_bail( ctx );
 	else
-		socket_expect_read( &ctx->conn, 1 );
+		socket_expect_activity( &ctx->conn, 1 );
 }
 #endif
 
 static void
 imap_open_store_greeted( imap_store_t *ctx )
 {
-	socket_expect_read( &ctx->conn, 0 );
+	socket_expect_activity( &ctx->conn, 0 );
 	if (!ctx->caps)
 		imap_exec( ctx, 0, imap_open_store_p2, "CAPABILITY" );
 	else

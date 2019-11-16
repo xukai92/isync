@@ -329,7 +329,7 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 		return;
 	}
 	SSL_set_mode( conn->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER );
-	socket_expect_read( conn, 1 );
+	socket_expect_activity( conn, 1 );
 	start_tls_p2( conn );
 }
 
@@ -348,7 +348,7 @@ start_tls_p2( conn_t *conn )
 
 static void start_tls_p3( conn_t *conn, int ok )
 {
-	socket_expect_read( conn, 0 );
+	socket_expect_activity( conn, 0 );
 	conn->state = SCK_READY;
 	conn->callbacks.starttls( ok, conn->callback_aux );
 }
@@ -578,7 +578,7 @@ socket_connect_one( conn_t *sock )
 			return;
 		}
 		conf_notifier( &sock->notify, 0, POLLOUT );
-		socket_expect_read( sock, 1 );
+		socket_expect_activity( sock, 1 );
 		sock->state = SCK_CONNECTING;
 		info( "\v\n" );
 		return;
@@ -612,7 +612,7 @@ socket_connected( conn_t *conn )
 		conn->addrs = 0;
 	}
 	conf_notifier( &conn->notify, 0, POLLIN );
-	socket_expect_read( conn, 0 );
+	socket_expect_activity( conn, 0 );
 	conn->state = SCK_READY;
 	conn->callbacks.connect( 1, conn->callback_aux );
 }
@@ -772,7 +772,7 @@ socket_fill( conn_t *sock )
 }
 
 void
-socket_expect_read( conn_t *conn, int expect )
+socket_expect_activity( conn_t *conn, int expect )
 {
 	if (conn->conf->timeout > 0 && expect != pending_wakeup( &conn->fd_timeout ))
 		conf_wakeup( &conn->fd_timeout, expect ? conn->conf->timeout : -1 );
