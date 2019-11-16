@@ -1063,11 +1063,11 @@ socket_fd_cb( int events, void *aux )
 		conf_wakeup( &conn->fd_timeout, conn->conf->timeout );
 
 #ifdef HAVE_LIBSSL
-	if (conn->state == SCK_STARTTLS) {
-		start_tls_p2( conn );
-		return;
-	}
 	if (conn->ssl) {
+		if (conn->state == SCK_STARTTLS) {
+			start_tls_p2( conn );
+			return;
+		}
 		if (do_queued_write( conn ) < 0)
 			return;
 		socket_fill( conn );
