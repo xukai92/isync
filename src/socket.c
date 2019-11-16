@@ -680,8 +680,6 @@ do_read( conn_t *sock, char *buf, int len )
 	int n;
 
 	assert( sock->fd >= 0 );
-	if (pending_wakeup( &sock->fd_timeout ))
-		conf_wakeup( &sock->fd_timeout, sock->conf->timeout );
 #ifdef HAVE_LIBSSL
 	if (sock->ssl) {
 		if ((n = ssl_return( "read from", sock, SSL_read( sock->ssl, buf, len ) )) <= 0)
@@ -1054,6 +1052,9 @@ socket_fd_cb( int events, void *aux )
 
 	if (events & POLLOUT)
 		conf_notifier( &conn->notify, POLLIN, 0 );
+
+	if (pending_wakeup( &conn->fd_timeout ))
+		conf_wakeup( &conn->fd_timeout, conn->conf->timeout );
 
 #ifdef HAVE_LIBSSL
 	if (conn->state == SCK_STARTTLS) {
