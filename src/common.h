@@ -235,6 +235,7 @@ typedef struct notifier {
 
 void init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux );
 void conf_notifier( notifier_t *sn, short and_events, short or_events );
+short notifier_config( notifier_t *sn );
 void wipe_notifier( notifier_t *sn );
 
 typedef struct {

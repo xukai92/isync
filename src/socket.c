@@ -884,7 +884,6 @@ do_queued_write( conn_t *conn )
 			return -1;
 		if (n != (int)len) {
 			conn->write_offset += (uint)n;
-			conn->writing = 1;
 			return 0;
 		}
 		conn->write_offset = 0;
@@ -894,7 +893,6 @@ do_queued_write( conn_t *conn )
 	if (conn->ssl && SSL_pending( conn->ssl ))
 		conf_wakeup( &conn->ssl_fake, 0 );
 #endif
-	conn->writing = 0;
 	conn->write_callback( conn->callback_aux );
 	return -1;
 }
@@ -1103,7 +1101,7 @@ socket_fake_cb( void *aux )
 	/* Ensure that a pending write gets queued. */
 	do_flush( conn );
 	/* If no writes are ongoing, start writing now. */
-	if (!conn->writing)
+	if (!(notifier_config( &conn->notify ) & POLLOUT))
 		do_queued_write( conn );
 }
 

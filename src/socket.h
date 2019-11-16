@@ -103,7 +103,6 @@ typedef struct {
 	/* writing */
 	buff_chunk_t *append_buf; /* accumulating buffer */
 	buff_chunk_t *write_buf, **write_buf_append; /* buffer head & tail */
-	int writing;
 #ifdef HAVE_LIBZ
 	uint append_avail; /* space left in accumulating buffer */
 #endif

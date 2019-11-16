@@ -704,6 +704,16 @@ conf_notifier( notifier_t *sn, short and_events, short or_events )
 #endif
 }
 
+short
+notifier_config( notifier_t *sn )
+{
+#ifdef HAVE_SYS_POLL_H
+	return pollfds[sn->index].events;
+#else
+	return sn->events;
+#endif
+}
+
 void
 wipe_notifier( notifier_t *sn )
 {
