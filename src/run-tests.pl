@@ -578,6 +578,7 @@ sub ckchan($$)
 	return $rslt;
 }
 
+# $boxname, $maxuid, @msgs
 sub printbox($$@)
 {
 	my ($bn, $mu, @ms) = @_;

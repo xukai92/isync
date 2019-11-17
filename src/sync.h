@@ -40,6 +40,7 @@
 #define XOP_PULL           (1<<9)
 #define  XOP_MASK_DIR      (XOP_PUSH|XOP_PULL)
 #define XOP_HAVE_TYPE      (1<<10)
+// The following must all have the same bit shift from the corresponding OP_* flags.
 #define XOP_HAVE_EXPUNGE   (1<<11)
 #define XOP_HAVE_CREATE    (1<<12)
 #define XOP_HAVE_REMOVE    (1<<13)

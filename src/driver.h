@@ -73,10 +73,13 @@ typedef struct message {
 	char tuid[TUIDL];
 } message_t;
 
-/* For opts, both in store and driver_t->select() */
-#define OPEN_OLD        (1<<0)
-#define OPEN_NEW        (1<<1)
-#define OPEN_FLAGS      (1<<2)
+// For driver_t->prepare_load_box(), which may amend the passed flags.
+// The drivers don't use the first two, but may set them if loading the
+// particular range is required to handle some other flag; note that these
+// ranges may overlap.
+#define OPEN_OLD        (1<<0)  // Paired messages *in* this store.
+#define OPEN_NEW        (1<<1)  // Messages (possibly) not yet propagated *from* this store.
+#define OPEN_FLAGS      (1<<2)  // Note that fetch_msg() gets the flags regardless.
 #define OPEN_OLD_SIZE   (1<<3)
 #define OPEN_NEW_SIZE   (1<<4)
 #define OPEN_EXPUNGE    (1<<5)
@@ -234,17 +237,17 @@ struct driver {
 	 * a pre-fetched one (in which case the in-memory representation is updated),
 	 * or it may be identifed by UID only. The operation may be delayed until commit()
 	 * is called. */
-	void (*set_msg_flags)( store_t *ctx, message_t *msg, uint uid, int add, int del, /* msg can be null, therefore uid as a fallback */
+	void (*set_msg_flags)( store_t *ctx, message_t *msg, uint uid, int add, int del,
 	                       void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Move the given message from the current mailbox to the trash folder.
 	 * This may expunge the original message immediately, but it needn't to. */
-	void (*trash_msg)( store_t *ctx, message_t *msg, /* This may expunge the original message immediately, but it needn't to */
+	void (*trash_msg)( store_t *ctx, message_t *msg,
 	                   void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Expunge deleted messages from the current mailbox and close it.
 	 * There is no need to explicitly close a mailbox if no expunge is needed. */
-	void (*close_box)( store_t *ctx, /* IMAP-style: expunge inclusive */
+	void (*close_box)( store_t *ctx,
 	                   void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Cancel queued commands which are not in flight yet; they will have their

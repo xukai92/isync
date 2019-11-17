@@ -128,7 +128,7 @@ make_flags( uchar flags, char *buf )
 	return d;
 }
 
-// These is the (mostly) persistent status of the sync record.
+// This is the (mostly) persistent status of the sync record.
 // Most of these bits are actually mutually exclusive. It is a
 // bitfield to allow for easy testing for multiple states.
 #define S_EXPIRE       (1<<0)  // the entry is being expired (near side message removal scheduled)
@@ -757,7 +757,7 @@ load_state( sync_vars_t *svars )
 			}
 			if (ll == 1)
 				goto gothdr;
-			if (line == 1 && isdigit( buf[0] )) {
+			if (line == 1 && isdigit( buf[0] )) {  // Pre-1.1 legacy
 				if (sscanf( buf, "%63s %63s", buf1, buf2 ) != 2 ||
 				    sscanf( buf1, "%u:%u", &svars->uidval[F], &svars->maxuid[F] ) < 2 ||
 				    sscanf( buf2, "%u:%u:%u", &svars->uidval[N], &maxxnuid, &svars->maxuid[N] ) < 3) {
@@ -781,7 +781,7 @@ load_state( sync_vars_t *svars )
 				svars->maxuid[N] = uid;
 			else if (!strcmp( buf1, "MaxExpiredFarUid" ) || !strcmp( buf1, "MaxExpiredMasterUid" ) /* Pre-1.4 legacy */)
 				svars->maxxfuid = uid;
-			else if (!strcmp( buf1, "MaxExpiredSlaveUid" ))  // Legacy
+			else if (!strcmp( buf1, "MaxExpiredSlaveUid" ))  // Pre-1.3 legacy
 				maxxnuid = uid;
 			else {
 				error( "Error: unrecognized sync state header entry at %s:%d\n", svars->dname, line );
@@ -1263,7 +1263,7 @@ box_opened2( sync_vars_t *svars, int t )
 				opts[1-t] |= OPEN_OLD;
 			if (chan->ops[t] & OP_NEW)
 				opts[1-t] |= OPEN_NEW;
-			if (chan->ops[t] & OP_EXPUNGE)
+			if (chan->ops[t] & OP_EXPUNGE)  // Don't propagate doomed msgs
 				opts[1-t] |= OPEN_FLAGS;
 			if (chan->stores[t]->max_size != UINT_MAX) {
 				if (chan->ops[t] & OP_RENEW)

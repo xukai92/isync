@@ -3099,6 +3099,7 @@ imap_find_new_msgs_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 		return;
 	}
 
+	// We appended messages, so we need to re-query UIDNEXT.
 	ctx->uidnext = 0;
 
 	INIT_IMAP_CMD(imap_cmd_find_new_t, cmd, cmdp->callback, cmdp->callback_aux)
