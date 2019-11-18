@@ -371,18 +371,26 @@ Use old versions only when the server has problems with newer ones.
 ..
 .TP
 \fBSystemCertificates\fR \fByes\fR|\fBno\fR
-Whether the system's default root cerificate store should be loaded.
+Whether the system's default CA (certificate authority) certificate
+store should be used to verify certificate trust chains. Disable this
+if you want to trust only hand-picked certificates.
 (Default: \fByes\fR)
 ..
 .TP
 \fBCertificateFile\fR \fIpath\fR
 File containing additional X.509 certificates used to verify server
-identities. Directly matched peer certificates are always trusted,
-regardless of validity.
+identities.
+These certificates are always trusted, regardless of validity.
 .br
-Note that the system's default certificate store is always used
-(unless \fBSystemCertificates\fR is disabled)
-and should not be specified here.
+The certificates from this file are matched only against the received
+server certificate itself; CA certificates are \fBnot\fR supported here.
+Do \fBnot\fR specify the system's CA certificate store here; see
+\fBSystemCertificates\fR instead.
+.br
+The contents for this file may be obtained using the
+\fBmbsync-get-cert\fR tool; make sure to verify the fingerprints of the
+certificates before trusting them, or transfer them securely from the
+server's network (if it is trusted).
 ..
 .TP
 \fBClientCertificate\fR \fIpath\fR
