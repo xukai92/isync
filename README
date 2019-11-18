@@ -55,10 +55,17 @@ isync executable still exists; it is a compatibility wrapper around mbsync.
 
 * Requirements
 
+    perl v5.14+
     Berkeley DB 4.1+ (optional)
     OpenSSL for TLS/SSL support (optional)
     Cyrus SASL (optional)
     zlib (optional)
+
+  The build from git also requires:
+
+    GNU autotools (autoconf & automake)
+    perl module Date::Parse (libtimedate-perl on Debian, perl-TimeDate on
+                             Fedora and Suse)
 
 * Installation
 
