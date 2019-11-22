@@ -1060,15 +1060,15 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			error( "IMAP error: bogus item name in FETCH response\n" );
 			goto ffail;
 		}
-		if (!strcmp( "UID", tmp->val )) {
-			tmp = tmp->next;
+		const char *name = tmp->val;
+		tmp = tmp->next;
+		if (!strcmp( "UID", name )) {
 			if (!is_atom( tmp ) || (uid = strtoul( tmp->val, &ep, 10 ), *ep)) {
 				error( "IMAP error: unable to parse UID\n" );
 				goto ffail;
 			}
 			continue;  // This *is* the UID.
-		} else if (!strcmp( "FLAGS", tmp->val )) {
-			tmp = tmp->next;
+		} else if (!strcmp( "FLAGS", name )) {
 			if (!is_list( tmp )) {
 				error( "IMAP error: unable to parse FLAGS\n" );
 				goto ffail;
@@ -1076,8 +1076,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			if (!parse_fetched_flags( tmp->child, &mask, &status ))
 				goto ffail;
 			continue;  // This may legitimately come without UID.
-		} else if (!strcmp( "INTERNALDATE", tmp->val )) {
-			tmp = tmp->next;
+		} else if (!strcmp( "INTERNALDATE", name )) {
 			if (!is_atom( tmp )) {
 				error( "IMAP error: unable to parse INTERNALDATE\n" );
 				goto ffail;
@@ -1086,21 +1085,18 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 				error( "IMAP error: unable to parse INTERNALDATE format\n" );
 				goto ffail;
 			}
-		} else if (!strcmp( "RFC822.SIZE", tmp->val )) {
-			tmp = tmp->next;
+		} else if (!strcmp( "RFC822.SIZE", name )) {
 			if (!is_atom( tmp ) || (size = strtoul( tmp->val, &ep, 10 ), *ep)) {
 				error( "IMAP error: unable to parse RFC822.SIZE\n" );
 				goto ffail;
 			}
-		} else if (!strcmp( "BODY[]", tmp->val )) {
-			tmp = tmp->next;
+		} else if (!strcmp( "BODY[]", name )) {
 			if (!is_atom( tmp )) {
 				error( "IMAP error: unable to parse BODY[]\n" );
 				goto ffail;
 			}
 			body = tmp;
-		} else if (!strcmp( "BODY[HEADER.FIELDS", tmp->val )) {
-			tmp = tmp->next;
+		} else if (!strcmp( "BODY[HEADER.FIELDS", name )) {
 			if (!is_list( tmp )) {
 			  bfail:
 				error( "IMAP error: unable to parse BODY[HEADER.FIELDS ...]\n" );
