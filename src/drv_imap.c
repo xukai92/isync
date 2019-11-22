@@ -1056,65 +1056,61 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	}
 
 	for (tmp = list->child; tmp; tmp = tmp->next) {
-		if (is_atom( tmp )) {
-			if (!strcmp( "UID", tmp->val )) {
-				tmp = tmp->next;
-				if (!is_atom( tmp ) || (uid = strtoul( tmp->val, &ep, 10 ), *ep)) {
-					error( "IMAP error: unable to parse UID\n" );
-					goto ffail;
-				}
-				continue;  // This *is* the UID.
-			} else if (!strcmp( "FLAGS", tmp->val )) {
-				tmp = tmp->next;
-				if (is_list( tmp )) {
-					if (!parse_fetched_flags( tmp->child, &mask, &status ))
-						goto ffail;
-					continue;  // This may legitimately come without UID.
-				} else {
-					error( "IMAP error: unable to parse FLAGS\n" );
-					goto ffail;
-				}
-			} else if (!strcmp( "INTERNALDATE", tmp->val )) {
-				tmp = tmp->next;
-				if (is_atom( tmp )) {
-					if ((date = parse_date( tmp->val )) == -1) {
-						error( "IMAP error: unable to parse INTERNALDATE format\n" );
-						goto ffail;
-					}
-				} else {
-					error( "IMAP error: unable to parse INTERNALDATE\n" );
-					goto ffail;
-				}
-			} else if (!strcmp( "RFC822.SIZE", tmp->val )) {
-				tmp = tmp->next;
-				if (!is_atom( tmp ) || (size = strtoul( tmp->val, &ep, 10 ), *ep)) {
-					error( "IMAP error: unable to parse RFC822.SIZE\n" );
-					goto ffail;
-				}
-			} else if (!strcmp( "BODY[]", tmp->val )) {
-				tmp = tmp->next;
-				if (is_atom( tmp )) {
-					body = tmp;
-				} else {
-					error( "IMAP error: unable to parse BODY[]\n" );
-					goto ffail;
-				}
-			} else if (!strcmp( "BODY[HEADER.FIELDS", tmp->val )) {
-				tmp = tmp->next;
-				if (is_list( tmp )) {
-					tmp = tmp->next;
-					if (!is_atom( tmp ) || strcmp( tmp->val, "]" ))
-						goto bfail;
-					tmp = tmp->next;
-					if (!is_atom( tmp ))
-						goto bfail;
-					parse_fetched_header( tmp->val, uid, &tuid, &msgid );
-				} else {
-				  bfail:
-					error( "IMAP error: unable to parse BODY[HEADER.FIELDS ...]\n" );
-					goto ffail;
-				}
+		if (!is_atom( tmp ))
+			continue;
+		if (!strcmp( "UID", tmp->val )) {
+			tmp = tmp->next;
+			if (!is_atom( tmp ) || (uid = strtoul( tmp->val, &ep, 10 ), *ep)) {
+				error( "IMAP error: unable to parse UID\n" );
+				goto ffail;
 			}
+			continue;  // This *is* the UID.
+		} else if (!strcmp( "FLAGS", tmp->val )) {
+			tmp = tmp->next;
+			if (!is_list( tmp )) {
+				error( "IMAP error: unable to parse FLAGS\n" );
+				goto ffail;
+			}
+			if (!parse_fetched_flags( tmp->child, &mask, &status ))
+				goto ffail;
+			continue;  // This may legitimately come without UID.
+		} else if (!strcmp( "INTERNALDATE", tmp->val )) {
+			tmp = tmp->next;
+			if (!is_atom( tmp )) {
+				error( "IMAP error: unable to parse INTERNALDATE\n" );
+				goto ffail;
+			}
+			if ((date = parse_date( tmp->val )) == -1) {
+				error( "IMAP error: unable to parse INTERNALDATE format\n" );
+				goto ffail;
+			}
+		} else if (!strcmp( "RFC822.SIZE", tmp->val )) {
+			tmp = tmp->next;
+			if (!is_atom( tmp ) || (size = strtoul( tmp->val, &ep, 10 ), *ep)) {
+				error( "IMAP error: unable to parse RFC822.SIZE\n" );
+				goto ffail;
+			}
+		} else if (!strcmp( "BODY[]", tmp->val )) {
+			tmp = tmp->next;
+			if (!is_atom( tmp )) {
+				error( "IMAP error: unable to parse BODY[]\n" );
+				goto ffail;
+			}
+			body = tmp;
+		} else if (!strcmp( "BODY[HEADER.FIELDS", tmp->val )) {
+			tmp = tmp->next;
+			if (!is_list( tmp )) {
+			  bfail:
+				error( "IMAP error: unable to parse BODY[HEADER.FIELDS ...]\n" );
+				goto ffail;
+			}
+			tmp = tmp->next;
+			if (!is_atom( tmp ) || strcmp( tmp->val, "]" ))
+				goto bfail;
+			tmp = tmp->next;
+			if (!is_atom( tmp ))
+				goto bfail;
+			parse_fetched_header( tmp->val, uid, &tuid, &msgid );
 		}
 		need_uid = 1;
 	}
