@@ -216,7 +216,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# DEFINE load_box_print_cb_args
 	if (sts == DRV_OK) {
 		for (message_t *msg = msgs; msg; msg = msg->next)
-			debug( "  uid=%5u, flags=%4s, size=%6d, tuid=%." stringify(TUIDL) "s\n",
+			debug( "  uid=%-5u flags=%-4s size=%-6d tuid=%." stringify(TUIDL) "s\n",
 			       msg->uid, (msg->status & M_FLAGS) ? (proxy_make_flags( msg->flags, fbuf ), fbuf) : "?", msg->size, *msg->tuid ? msg->tuid : "?" );
 	}
 //# END
@@ -226,7 +226,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# DEFINE find_new_msgs_print_cb_args
 	if (sts == DRV_OK) {
 		for (message_t *msg = msgs; msg; msg = msg->next)
-			debug( "  uid=%5u, tuid=%." stringify(TUIDL) "s\n", msg->uid, msg->tuid );
+			debug( "  uid=%-5u tuid=%." stringify(TUIDL) "s\n", msg->uid, msg->tuid );
 	}
 //# END
 
