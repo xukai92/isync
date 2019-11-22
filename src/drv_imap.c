@@ -1056,8 +1056,10 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	}
 
 	for (tmp = list->child; tmp; tmp = tmp->next) {
-		if (!is_atom( tmp ))
-			continue;
+		if (!is_atom( tmp )) {
+			error( "IMAP error: bogus item name in FETCH response\n" );
+			goto ffail;
+		}
 		if (!strcmp( "UID", tmp->val )) {
 			tmp = tmp->next;
 			if (!is_atom( tmp ) || (uid = strtoul( tmp->val, &ep, 10 ), *ep)) {
