@@ -549,8 +549,8 @@ sort_uint_array( uint_array_t array )
 int
 find_uint_array( uint_array_t array, uint value )
 {
-	int bot = 0, top = array.size - 1;
-	while (bot <= top) {
+	int bot = 0, top = array.size;
+	while (bot < top) {
 		int i = (bot + top) / 2;
 		uint elt = array.data[i];
 		if (elt == value)
@@ -558,7 +558,7 @@ find_uint_array( uint_array_t array, uint value )
 		if (elt < value)
 			bot = i + 1;
 		else
-			top = i - 1;
+			top = i;
 	}
 	return 0;
 }
