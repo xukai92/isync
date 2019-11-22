@@ -1180,7 +1180,7 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 		if (!(arg = next_arg( &s )) ||
 		    (ctx->uidnext = strtoul( arg, &earg, 10 ), *earg))
 		{
-			error( "IMAP error: malformed NEXTUID status\n" );
+			error( "IMAP error: malformed UIDNEXT status\n" );
 			return RESP_CANCEL;
 		}
 	} else if (!strcmp( "CAPABILITY", arg )) {
@@ -1260,8 +1260,20 @@ parse_list_rsp_p1( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	return parse_list( ctx, cmd, parse_list_rsp_p2 );
 }
 
+// Use this to check whether a full path refers to the actual IMAP INBOX.
 static int
 is_inbox( imap_store_t *ctx, const char *arg, int argl )
+{
+	if (!starts_with_upper( arg, argl, "INBOX", 5 ))
+		return 0;
+	if (arg[5] && arg[5] != ctx->delimiter[0])
+		return 0;
+	return 1;
+}
+
+// Use this to check whether a path fragment collides with the canonical INBOX.
+static int
+is_INBOX( imap_store_t *ctx, const char *arg, int argl )
 {
 	if (!starts_with( arg, argl, "INBOX", 5 ))
 		return 0;
@@ -1284,16 +1296,22 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	}
 	arg = list->val;
 	argl = list->len;
-	if ((l = strlen( ctx->prefix ))) {
-		if (starts_with( arg, argl, ctx->prefix, l )) {
-			arg += l;
-			argl -= l;
-			if (is_inbox( ctx, arg, argl )) {
-				if (!arg[5])
-					warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
-				goto skip;
-			}
-		} else if (!is_inbox( ctx, arg, argl )) {
+	if (is_inbox( ctx, arg, argl )) {
+		// The server might be weird and have a non-uppercase INBOX. It
+		// may legitimately do so, but we need the canonical spelling.
+		memcpy( arg, "INBOX", 5 );
+	} else if ((l = strlen( ctx->prefix ))) {
+		if (!starts_with( arg, argl, ctx->prefix, l ))
+			goto skip;
+		arg += l;
+		argl -= l;
+		// A folder named "INBOX" would be indistinguishable from the
+		// actual INBOX after prefix stripping, so drop it. This applies
+		// only to the fully uppercased spelling, as our canonical box
+		// names are case-sensitive (unlike IMAP's INBOX).
+		if (is_INBOX( ctx, arg, argl )) {
+			if (!arg[5])  // No need to complain about subfolders as well.
+				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
 			goto skip;
 		}
 	}
@@ -2432,9 +2450,15 @@ imap_open_box_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 {
 	imap_cmd_open_box_t *cmdp = (imap_cmd_open_box_t *)gcmd;
 
-	// This will happen if the box is empty.
-	if (!ctx->uidnext)
+	if (!ctx->uidnext) {
+		if (ctx->total_msgs) {
+			error( "IMAP error: querying server for highest UID failed\n" );
+			imap_open_box_p4( ctx, cmdp, RESP_NO );
+			return;
+		}
+		// This is ok, the box is simply empty.
 		ctx->uidnext = 1;
+	}
 
 	imap_open_box_p4( ctx, cmdp, response );
 }
@@ -3018,8 +3042,14 @@ imap_find_new_msgs_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 	imap_cmd_find_new_t *cmdp = (imap_cmd_find_new_t *)gcmd;
 	imap_cmd_find_new_t *cmd;
 
-	if (response != RESP_OK || ctx->uidnext <= cmdp->uid) {
+	if (response != RESP_OK) {
 		imap_find_new_msgs_p4( ctx, gcmd, response );
+		return;
+	}
+	if (!ctx->uidnext) {
+		// We are assuming that the new messages were not in fact instantly deleted.
+		error( "IMAP error: re-querying server for highest UID failed\n" );
+		imap_find_new_msgs_p4( ctx, gcmd, RESP_NO );
 		return;
 	}
 	INIT_IMAP_CMD(imap_cmd_find_new_t, cmd, cmdp->callback, cmdp->callback_aux)

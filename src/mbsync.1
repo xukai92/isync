@@ -1,33 +1,32 @@
-.ig
-\" mbsync - mailbox synchronizer
-\" Copyright (C) 2000-2002 Michael R. Elkins <me@mutt.org>
-\" Copyright (C) 2002-2004,2011-2015 Oswald Buddenhagen <ossi@users.sf.net>
-\" Copyright (C) 2004 Theodore Y. Ts'o <tytso@mit.edu>
-\"
-\"  This program is free software; you can redistribute it and/or modify
-\"  it under the terms of the GNU General Public License as published by
-\"  the Free Software Foundation; either version 2 of the License, or
-\"  (at your option) any later version.
-\"
-\"  This program is distributed in the hope that it will be useful,
-\"  but WITHOUT ANY WARRANTY; without even the implied warranty of
-\"  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-\"  GNU General Public License for more details.
-\"
-\"  You should have received a copy of the GNU General Public License
-\"  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-\"
-\" As a special exception, mbsync may be linked with the OpenSSL library,
-\" despite that library's more restrictive license.
-..
+.\" mbsync - mailbox synchronizer
+.\" Copyright (C) 2000-2002 Michael R. Elkins <me@mutt.org>
+.\" Copyright (C) 2002-2004,2011-2015 Oswald Buddenhagen <ossi@users.sf.net>
+.\" Copyright (C) 2004 Theodore Y. Ts'o <tytso@mit.edu>
+.\"
+.\"  This program is free software; you can redistribute it and/or modify
+.\"  it under the terms of the GNU General Public License as published by
+.\"  the Free Software Foundation; either version 2 of the License, or
+.\"  (at your option) any later version.
+.\"
+.\"  This program is distributed in the hope that it will be useful,
+.\"  but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\"  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\"  GNU General Public License for more details.
+.\"
+.\"  You should have received a copy of the GNU General Public License
+.\"  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+.\"
+.\" As a special exception, mbsync may be linked with the OpenSSL library,
+.\" despite that library's more restrictive license.
+.
 .TH mbsync 1 "2015 Mar 22"
-..
+.
 .SH NAME
 mbsync - synchronize IMAP4 and Maildir mailboxes
-..
+.
 .SH SYNOPSIS
 \fBmbsync\fR [\fIoptions\fR ...] {{\fIchannel\fR[\fB:\fIbox\fR[{\fB,\fR|\fB\\n\fR}...]]|\fIgroup\fR} ...|\fB-a\fR}
-..
+.
 .SH DESCRIPTION
 \fBmbsync\fR is a command line application which synchronizes mailboxes;
 currently Maildir and IMAP4 mailboxes are supported.
@@ -43,7 +42,7 @@ these files are protected against concurrent \fBmbsync\fR processes.
 Mailboxes can be safely modified while \fBmbsync\fR operates
 (see \fBINHERENT PROBLEMS\fR below for a minor exception).
 Multiple replicas of each mailbox can be maintained.
-..
+.
 .SH OPTIONS
 .TP
 \fB-c\fR, \fB--config\fR \fIfile\fR
@@ -110,7 +109,7 @@ Without category specification, all categories except net-all are enabled.
 Suppress progress counters (this is implicit if stdout is no TTY,
 or any debugging categories are enabled) and notices.
 If specified twice, suppress warning messages as well.
-..
+.
 .SH CONFIGURATION
 The configuration file is mandatory; \fBmbsync\fR will not run without it.
 Lines starting with a hash mark (\fB#\fR) are comments and are ignored entirely.
@@ -141,7 +140,7 @@ even combinations thereof.
 .br
 Mailbox names, OTOH, always use canonical path separators, which are
 Unix-like forward slashes.
-..
+.
 .SS All Stores
 These options can be used in all supported Store types.
 .br
@@ -150,7 +149,7 @@ and not necessarily a remote server.
 .br
 The special mailbox \fBINBOX\fR exists in every Store; its physical location
 in the file system is Store type specific.
-..
+.
 .TP
 \fBPath\fR \fIpath\fR
 The location of the Store in the (server's) file system.
@@ -161,7 +160,7 @@ in the Channels section.
 Note that you \fBmust\fR append a slash if you want to specify an entire
 directory.
 (Default: none)
-..
+.
 .TP
 \fBMaxSize\fR \fIsize\fR[\fBk\fR|\fBm\fR][\fBb\fR]
 Messages larger than that will not be propagated into this Store.
@@ -170,7 +169,7 @@ This is useful for weeding out messages with large attachments.
 MeBytes instead of bytes. \fBB\fR is accepted but superfluous.
 If \fIsize\fR is 0, the maximum message size is \fBunlimited\fR.
 (Default: \fI0\fR)
-..
+.
 .TP
 \fBMapInbox\fR \fImailbox\fR
 Create a virtual mailbox (relative to \fBPath\fR) which aliases
@@ -178,7 +177,7 @@ the \fBINBOX\fR. Makes sense in conjunction with \fBPatterns\fR in the
 Channels section, though with a Maildir slave, you probably want to
 place \fBInbox\fR under \fBPath\fR instead.
 This virtual mailbox does not support subfolders.
-..
+.
 .TP
 \fBFlatten\fR \fIdelim\fR
 Flatten the hierarchy within this Store by substituting the canonical
@@ -190,27 +189,27 @@ A common choice for the delimiter is \fB.\fR.
 .br
 Note that flattened sub-folders of the \fBINBOX\fR always end up
 under \fBPath\fR, including the "INBOX\fIdelim\fR" prefix.
-..
+.
 .TP
 \fBTrash\fR \fImailbox\fR
 Specifies a mailbox (relative to \fBPath\fR) to copy deleted messages to
 prior to expunging.
 See \fBRECOMMENDATIONS\fR and \fBINHERENT PROBLEMS\fR below.
 (Default: none)
-..
+.
 .TP
 \fBTrashNewOnly\fR \fByes\fR|\fBno\fR
 When trashing, copy only not yet propagated messages. This makes sense if the
 remote Store has a \fBTrash\fR as well (with \fBTrashNewOnly\fR \fBno\fR).
 (Default: \fBno\fR)
-..
+.
 .TP
 \fBTrashRemoteNew\fR \fByes\fR|\fBno\fR
 When expunging the remote Store, copy not yet propagated messages to this
 Store's \fBTrash\fR. When using this, the remote Store does not need an own
 \fBTrash\fR at all, yet all messages are archived.
 (Default: \fBno\fR)
-..
+.
 .SS Maildir Stores
 The reference point for relative \fBPath\fRs is the current working directory.
 .P
@@ -238,11 +237,11 @@ message deletion and a new message, resulting in unnecessary traffic.
 \fBMutt\fR is known to work fine with both schemes.
 .br
 Use \fBmdconvert\fR to convert mailboxes from one scheme to the other.
-..
+.
 .TP
 \fBMaildirStore\fR \fIname\fR
 Define the Maildir Store \fIname\fR, opening a section for its parameters.
-..
+.
 .TP
 \fBAltMap\fR \fByes\fR|\fBno\fR
 Use the \fBalternative\fR UID storage scheme for mailboxes in this Store.
@@ -250,20 +249,20 @@ This does not affect mailboxes that do already have a UID storage scheme;
 use \fBmdconvert\fR to change it.
 See \fBRECOMMENDATIONS\fR below.
 (Default: \fBno\fR)
-..
+.
 .TP
 \fBInbox\fR \fIpath\fR
 The location of the \fBINBOX\fR. This is \fInot\fR relative to \fBPath\fR,
 but it is allowed to place the \fBINBOX\fR inside the \fBPath\fR.
 (Default: \fI~/Maildir\fR)
-..
+.
 .TP
 \fBInfoDelimiter\fR \fIdelim\fR
 The character used to delimit the info field from a message's basename.
 The Maildir standard defines this to be the colon, but this is incompatible
 with DOS/Windows file systems.
 (Default: the value of \fBFieldDelimiter\fR)
-..
+.
 .TP
 \fBSubFolders\fR \fBVerbatim\fR|\fBMaildir++\fR|\fBLegacy\fR
 The on-disk folder naming style used for hierarchical mailboxes.
@@ -284,12 +283,12 @@ Note that attempts to set \fBPath\fR are rejected in this mode.
 (this is \fBmbsync\fR's historical style)
 .br
 (Default: unset; will error out when sub-folders are encountered)
-..
+.
 .SS IMAP4 Accounts
 .TP
 \fBIMAPAccount\fR \fIname\fR
 Define the IMAP4 Account \fIname\fR, opening a section for its parameters.
-..
+.
 .TP
 \fBHost\fR \fIhost\fR
 Specify the DNS name or IP address of the IMAP server.
@@ -297,31 +296,31 @@ Specify the DNS name or IP address of the IMAP server.
 If \fBTunnel\fR is used, this setting is needed only if \fBSSLType\fR is
 not \fBNone\fR and \fBCertificateFile\fR is not used,
 in which case the host name is used for certificate subject verification.
-..
+.
 .TP
 \fBPort\fR \fIport\fR
 Specify the TCP port number of the IMAP server.  (Default: 143 for IMAP,
 993 for IMAPS)
 .br
 If \fBTunnel\fR is used, this setting is ignored.
-..
+.
 .TP
 \fBTimeout\fR \fItimeout\fR
 Specify the connect and data timeout for the IMAP server in seconds.
 Zero means unlimited.
 (Default: \fI20\fR)
-..
+.
 .TP
 \fBUser\fR \fIusername\fR
 Specify the login name on the IMAP server.
-..
+.
 .TP
 \fBPass\fR \fIpassword\fR
 Specify the password for \fIusername\fR on the IMAP server.
 Note that this option is \fInot\fR required.
 If neither a password nor a password command is specified in the
 configuration file, \fBmbsync\fR will prompt you for a password.
-..
+.
 .TP
 \fBPassCmd\fR [\fB+\fR]\fIcommand\fR
 Specify a shell command to obtain a password rather than specifying a
@@ -331,13 +330,13 @@ optional.
 Prepend \fB+\fR to the command to indicate that it produces TTY output
 (e.g., a decryption password prompt); failure to do so will merely produce
 messier output.
-..
+.
 .TP
 \fBTunnel\fR \fIcommand\fR
 Specify a command to run to establish a connection rather than opening a TCP
 socket.  This allows you to run an IMAP session over an SSH tunnel, for
 example.
-..
+.
 .TP
 \fBAuthMechs\fR \fItype\fR ...
 The list of acceptable authentication mechanisms.
@@ -348,7 +347,7 @@ enough for the current \fBSSLType\fR setting.
 The actually used mechanism is the most secure choice from the intersection
 of this list, the list supplied by the server, and the installed SASL modules.
 (Default: \fB*\fR)
-..
+.
 .TP
 \fBSSLType\fR {\fBNone\fR|\fBSTARTTLS\fR|\fBIMAPS\fR}
 Select the connection security/encryption method:
@@ -362,28 +361,36 @@ so it is the default (unless a tunnel is used).
 .br
 \fBIMAPS\fR - security is established by starting SSL/TLS negotiation
 right after connecting the secure IMAP port 993.
-..
+.
 .TP
 \fBSSLVersions\fR [\fBSSLv3\fR] [\fBTLSv1\fR] [\fBTLSv1.1\fR] [\fBTLSv1.2\fR]
 Select the acceptable SSL/TLS versions.
 Use old versions only when the server has problems with newer ones.
 (Default: [\fBTLSv1\fR] [\fBTLSv1.1\fR] [\fBTLSv1.2\fR]).
-..
+.
 .TP
 \fBSystemCertificates\fR \fByes\fR|\fBno\fR
-Whether the system's default root cerificate store should be loaded.
+Whether the system's default CA (certificate authority) certificate
+store should be used to verify certificate trust chains. Disable this
+if you want to trust only hand-picked certificates.
 (Default: \fByes\fR)
-..
+.
 .TP
 \fBCertificateFile\fR \fIpath\fR
 File containing additional X.509 certificates used to verify server
-identities. Directly matched peer certificates are always trusted,
-regardless of validity.
+identities.
+These certificates are always trusted, regardless of validity.
 .br
-Note that the system's default certificate store is always used
-(unless \fBSystemCertificates\fR is disabled)
-and should not be specified here.
-..
+The certificates from this file are matched only against the received
+server certificate itself; CA certificates are \fBnot\fR supported here.
+Do \fBnot\fR specify the system's CA certificate store here; see
+\fBSystemCertificates\fR instead.
+.br
+The contents for this file may be obtained using the
+\fBmbsync-get-cert\fR tool; make sure to verify the fingerprints of the
+certificates before trusting them, or transfer them securely from the
+server's network (if it is trusted).
+.
 .TP
 \fBClientCertificate\fR \fIpath\fR
 File containing a client certificate to send to the server.
@@ -391,11 +398,11 @@ File containing a client certificate to send to the server.
 .br
 Note that client certificate verification is usually not required,
 so it is unlikely that you need this option.
-..
+.
 .TP
 \fBClientKey\fR \fIpath\fR
 File containing the private key corresponding to \fBClientCertificate\fR.
-..
+.
 .TP
 \fBPipelineDepth\fR \fIdepth\fR
 Maximum number of IMAP commands which can be simultaneously in flight.
@@ -404,14 +411,14 @@ This is mostly a debugging option, but may also be used to limit average
 bandwidth consumption (GMail may require this if you have a very fast
 connection), or to spare flaky servers like M$ Exchange.
 (Default: \fIunlimited\fR)
-..
+.
 .TP
 \fBDisableExtension\fR[\fBs\fR] \fIextension\fR ...
 Disable the use of specific IMAP extensions.
 This can be used to work around bugs in servers
 (and possibly \fBmbsync\fR itself).
 (Default: empty)
-..
+.
 .SS IMAP Stores
 The reference point for relative \fBPath\fRs is whatever the server likes it
 to be; probably the user's $HOME or $HOME/Mail on that server. The location
@@ -419,21 +426,21 @@ of \fBINBOX\fR is up to the server as well and is usually irrelevant.
 .TP
 \fBIMAPStore\fR \fIname\fR
 Define the IMAP4 Store \fIname\fR, opening a section for its parameters.
-..
+.
 .TP
 \fBAccount\fR \fIaccount\fR
 Specify which IMAP4 Account to use. Instead of defining an Account and
 referencing it here, it is also possible to specify all the Account options
 directly in the Store's section - this makes sense if an Account is used for
 one Store only anyway.
-..
+.
 .TP
 \fBUseNamespace\fR \fByes\fR|\fBno\fR
 Selects whether the server's first "personal" NAMESPACE should be prefixed to
 mailbox names. Disabling this makes sense for some broken IMAP servers.
 This option is meaningless if a \fBPath\fR was specified.
 (Default: \fByes\fR)
-..
+.
 .TP
 \fBPathDelimiter\fR \fIdelim\fR
 Specify the server's hierarchy delimiter.
@@ -441,12 +448,12 @@ Specify the server's hierarchy delimiter.
 .br
 Do \fInot\fR abuse this to re-interpret the hierarchy.
 Use \fBFlatten\fR instead.
-..
+.
 .SS Channels
 .TP
 \fBChannel\fR \fIname\fR
 Define the Channel \fIname\fR, opening a section for its parameters.
-..
+.
 .TP
 {\fBMaster\fR|\fBSlave\fR} \fB:\fIstore\fB:\fR[\fImailbox\fR]
 Specify the Master resp. Slave Store to be connected by this Channel.
@@ -454,7 +461,7 @@ If \fBPatterns\fR are specified, \fImailbox\fR is interpreted as a
 prefix which is not matched against the patterns, and which is not
 affected by mailbox list overrides.
 Otherwise, if \fImailbox\fR is omitted, \fBINBOX\fR is assumed.
-..
+.
 .TP
 \fBPattern\fR[\fBs\fR] [\fB!\fR]\fIpattern\fR ...
 Instead of synchronizing only one mailbox pair, synchronize all mailboxes
@@ -472,13 +479,13 @@ The mailbox list selected by \fBPatterns\fR can be overridden by a mailbox
 list in a channel reference (a \fBGroup\fR specification or the command line).
 .br
 Example: "\fBPatterns\fR\ \fI%\ !Trash\fR"
-..
+.
 .TP
 \fBMaxSize\fR \fIsize\fR[\fBk\fR|\fBm\fR][\fBb\fR]
 Analogous to the homonymous option in the Stores section, but applies equally
 to Master and Slave. Note that this actually modifies the Stores, so take care
 not to provide conflicting settings if you use the Stores in multiple Channels.
-..
+.
 .TP
 \fBMaxMessages\fR \fIcount\fR
 Sets the maximum number of messages to keep in each Slave mailbox.
@@ -490,7 +497,7 @@ Messages that are flagged (marked as important) and (by default) unread
 messages will not be automatically deleted.
 If \fIcount\fR is 0, the maximum number of messages is \fBunlimited\fR
 (Default: \fI0\fR).
-..
+.
 .TP
 \fBExpireUnread\fR \fByes\fR|\fBno\fR
 Selects whether unread messages should be affected by \fBMaxMessages\fR.
@@ -500,7 +507,7 @@ However, if your archive contains large amounts of unread messages by design,
 treating them as important would practically defeat \fBMaxMessages\fR. In this
 case you need to enable this option.
 (Default: \fBno\fR).
-..
+.
 .TP
 \fBSync\fR {\fBNone\fR|[\fBPull\fR] [\fBPush\fR] [\fBNew\fR] [\fBReNew\fR] [\fBDelete\fR] [\fBFlags\fR]|\fBAll\fR}
 Select the synchronization operation(s) to perform:
@@ -555,14 +562,14 @@ from the Slave to the Master.
 Note that it is not allowed to assert a cell in two ways, e.g.
 "\fBSync\fR\ \fBPullNew\fR\ \fBPull\fR" and
 "\fBSync\fR\ \fBPullNew\fR\ \fBDelete\fR\ \fBPush\fR" induce error messages.
-..
+.
 .TP
 \fBCreate\fR {\fBNone\fR|\fBMaster\fR|\fBSlave\fR|\fBBoth\fR}
 Automatically create missing mailboxes [on the Master/Slave].
 Otherwise print an error message and skip that mailbox pair if a mailbox
 and the corresponding sync state does not exist.
 (Global default: \fBNone\fR)
-..
+.
 .TP
 \fBRemove\fR {\fBNone\fR|\fBMaster\fR|\fBSlave\fR|\fBBoth\fR}
 Propagate mailbox deletions [to the Master/Slave].
@@ -575,13 +582,13 @@ mark them as deleted. This ensures compatibility with \fBSyncState *\fR.
 Note that for safety, non-empty mailboxes are never deleted.
 .br
 (Global default: \fBNone\fR)
-..
+.
 .TP
 \fBExpunge\fR {\fBNone\fR|\fBMaster\fR|\fBSlave\fR|\fBBoth\fR}
 Permanently remove all messages [on the Master/Slave] marked for deletion.
 See \fBRECOMMENDATIONS\fR below.
 (Global default: \fBNone\fR)
-..
+.
 .TP
 \fBCopyArrivalDate\fR {\fByes\fR|\fBno\fR}
 Selects whether their arrival time should be propagated together with
@@ -591,14 +598,14 @@ sorting intact.
 Note that IMAP does not guarantee that the time stamp (termed \fBinternal
 date\fR) is actually the arrival time, but it is usually close enough.
 (Default: \fBno\fR)
-..
+.
 .P
 \fBSync\fR, \fBCreate\fR, \fBRemove\fR, \fBExpunge\fR,
 \fBMaxMessages\fR, and \fBCopyArrivalDate\fR
 can be used before any section for a global effect.
 The global settings are overridden by Channel-specific options,
 which in turn are overridden by command line switches.
-..
+.
 .TP
 \fBSyncState\fR {\fB*\fR|\fIpath\fR}
 Set the location of this Channel's synchronization state files.
@@ -615,7 +622,7 @@ the appended string is made up according to the pattern
 (see also \fBFieldDelimiter\fR below).
 .br
 (Global default: \fI~/.mbsync/\fR).
-..
+.
 .SS Groups
 .TP
 \fBGroup\fR \fIname\fR [\fIchannel\fR[\fB:\fIbox\fR[\fB,\fR...]]] ...
@@ -629,12 +636,12 @@ If you supply one or more \fIbox\fRes to a \fIchannel\fR, they will be used
 instead of what is specified in the Channel's Patterns.
 The same can be done on the command line, except that there newlines can be
 used as mailbox name separators as well.
-..
+.
 .TP
 \fBChannel\fR[\fBs\fR] \fIchannel\fR[\fB:\fIbox\fR[\fB,\fR...]] ...
 Add the specified channels to the group. This option can be specified multiple
 times within a Group.
-..
+.
 .SS Global Options
 .TP
 \fBFSync\fR \fByes\fR|\fBno\fR
@@ -647,7 +654,7 @@ Enabling it is a wise choice for file systems mounted with data=writeback,
 in particular modern systems like ext4, btrfs and xfs. The performance impact
 on older file systems may be disproportionate.
 (Default: \fByes\fR)
-..
+.
 .TP
 \fBFieldDelimiter\fR \fIdelim\fR
 The character to use to delimit fields in the string appended to a global
@@ -657,7 +664,7 @@ DOS/Windows file systems.
 This option is meaningless for \fBSyncState\fR if the latter is \fB*\fR,
 obviously. However, it also determines the default of \fBInfoDelimiter\fR.
 (Global default: \fI;\fR on Windows, \fI:\fR everywhere else)
-..
+.
 .TP
 \fBBufferLimit\fR \fIsize\fR[\fBk\fR|\fBm\fR][\fBb\fR]
 The per-Channel, per-direction instantaneous memory usage above which
@@ -665,7 +672,7 @@ The per-Channel, per-direction instantaneous memory usage above which
 absolute limit, as even a single message can consume more memory than
 this.
 (Default: \fI10M\fR)
-..
+.
 .SH CONSOLE OUTPUT
 If \fBmbsync\fR's output is connected to a console, it will print progress
 counters by default. The output will look like this:
@@ -680,7 +687,7 @@ The message counts represent added messages, messages with updated flags,
 and trashed messages, respectively.
 No attempt is made to calculate the totals in advance, so they grow over
 time as more information is gathered.
-..
+.
 .SH RECOMMENDATIONS
 Make sure your IMAP server does not auto-expunge deleted messages - it is
 slow, and semantically somewhat questionable. Specifically, Gmail needs to
@@ -719,7 +726,7 @@ Mutt always does that, while mu4e needs to be configured to do it:
 .in +4
 (setq mu4e-change-filenames-when-moving t)
 .in -4
-..
+.
 .SH INHERENT PROBLEMS
 Changes done after \fBmbsync\fR has retrieved the message list will not be
 synchronised until the next time \fBmbsync\fR is invoked.
@@ -730,7 +737,7 @@ lost if they are marked as deleted after the message list was retrieved but
 before the mailbox is expunged.
 There is no risk as long as the IMAP mailbox is accessed by only one client
 (including \fBmbsync\fR) at a time.
-..
+.
 .SH FILES
 .TP
 .B ~/.mbsyncrc
@@ -738,7 +745,7 @@ Default configuration file
 .TP
 .B ~/.mbsync/
 Directory containing synchronization state files
-..
+.
 .SH SEE ALSO
 mdconvert(1), mutt(1), maildir(5)
 .P
@@ -746,7 +753,7 @@ Up to date information on \fBmbsync\fR can be found at http://isync.sf.net/
 .P
 SASL mechanisms are listed at
 http://www.iana.org/assignments/sasl-mechanisms/sasl-mechanisms.xhtml
-..
+.
 .SH AUTHORS
 Originally written by Michael R. Elkins,
 rewritten and currently maintained by Oswald Buddenhagen,

@@ -54,10 +54,17 @@ change was necessary because of massive changes in the user interface.
 
 * Requirements
 
+    perl v5.14+
     Berkeley DB 4.1+ (optional)
     OpenSSL for TLS/SSL support (optional)
     Cyrus SASL (optional)
     zlib (optional)
+
+  The build from git also requires:
+
+    GNU autotools (autoconf & automake)
+    perl module Date::Parse (libtimedate-perl on Debian, perl-TimeDate on
+                             Fedora and Suse)
 
 * Installation
 

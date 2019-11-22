@@ -30,6 +30,9 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/wait.h>
+#ifdef __linux__
+# include <sys/prctl.h>
+#endif
 
 int DFlags;
 int JLimit;
@@ -77,7 +80,8 @@ PACKAGE " " VERSION " - mailbox synchronizer\n"
 "  -N, --renew		propagate previously not propagated new messages\n"
 "  -L, --pull		propagate from master to slave\n"
 "  -H, --push		propagate from slave to master\n"
-"  -C, --create		create mailboxes if nonexistent\n"
+"  -C, --create		propagate creations of mailboxes\n"
+"  -R, --remove		propagate deletions of mailboxes\n"
 "  -X, --expunge		expunge	deleted messages\n"
 "  -c, --config CONFIG	read an alternate config file (default: ~/." EXE "rc)\n"
 "  -D, --debug		debugging modes (see manual)\n"
@@ -88,7 +92,8 @@ PACKAGE " " VERSION " - mailbox synchronizer\n"
 "\nIf neither --pull nor --push are specified, both are active.\n"
 "If neither --new, --delete, --flags nor --renew are specified, all are active.\n"
 "Direction and operation can be concatenated like --pull-new, etc.\n"
-"--create and --expunge can be suffixed with -master/-slave. Read the man page.\n"
+"--create, --remove, and --expunge can be suffixed with -master/-slave.\n"
+"See the man page for details.\n"
 "\nSupported mailbox formats are: IMAP4rev1, Maildir\n"
 "\nCompile time options:\n"
 #ifdef HAVE_LIBSSL
@@ -142,17 +147,34 @@ crashHandler( int n )
 	dup2( 0, 1 );
 	dup2( 0, 2 );
 	error( "*** " EXE " caught signal %d. Starting debugger ...\n", n );
+#ifdef PR_SET_PTRACER
+	int pip[2];
+	if (pipe( pip ) < 0) {
+		perror( "pipe()" );
+		exit( 3 );
+	}
+#endif
 	switch ((dpid = fork())) {
 	case -1:
 		perror( "fork()" );
 		break;
 	case 0:
+#ifdef PR_SET_PTRACER
+		close( pip[1] );
+		read( pip[0], pbuf, 1 );
+		close( pip[0] );
+#endif
 		sprintf( pbuf, "%d", Pid );
 		sprintf( pabuf, "/proc/%d/exe", Pid );
 		execlp( "gdb", "gdb", pabuf, pbuf, (char *)0 );
 		perror( "execlp()" );
 		_exit( 1 );
 	default:
+#ifdef PR_SET_PTRACER
+		prctl( PR_SET_PTRACER, (ulong)dpid );
+		close( pip[1] );
+		close( pip[0] );
+#endif
 		waitpid( dpid, 0, 0 );
 		break;
 	}

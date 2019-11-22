@@ -37,8 +37,6 @@ Patterns.
   function being missing so far
 - this is needed for move detection, which would work only within one Channel
 
-normalize INBOX capitalization received from IMAP, to avoid anomalies.
-
 kill the concept of an INBOX, it is a relic from single-channel operation.
 if somebody needs it, he can have two stores with different Paths. the path
 can name a single (in-)box (curr. broken with maildir). an empty box name
