@@ -840,8 +840,8 @@ maildir_compare( const void *l, const void *r )
 	char *ldot, *rdot, *ldot2, *rdot2, *lseq, *rseq;
 	int ret, llen, rlen;
 
-	if ((ret = lm->uid - rm->uid))
-		return ret;
+	if (lm->uid != rm->uid)  // Can't subtract, the result might not fit into signed int.
+		return lm->uid > rm->uid ? 1 : -1;
 
 	/* No UID, so sort by arrival date. We should not do this, but we rely
 	   on the suggested unique file name scheme - we have no choice. */
