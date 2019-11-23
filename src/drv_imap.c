@@ -2404,9 +2404,15 @@ imap_open_box_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 {
 	imap_cmd_open_box_t *cmdp = (imap_cmd_open_box_t *)gcmd;
 
-	// This will happen if the box is empty.
-	if (!ctx->uidnext)
+	if (!ctx->uidnext) {
+		if (ctx->total_msgs) {
+			error( "IMAP error: querying server for highest UID failed\n" );
+			imap_open_box_p4( ctx, cmdp, RESP_NO );
+			return;
+		}
+		// This is ok, the box is simply empty.
 		ctx->uidnext = 1;
+	}
 
 	imap_open_box_p4( ctx, cmdp, response );
 }
@@ -2983,8 +2989,14 @@ imap_find_new_msgs_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 	imap_cmd_find_new_t *cmdp = (imap_cmd_find_new_t *)gcmd;
 	imap_cmd_find_new_t *cmd;
 
-	if (response != RESP_OK || ctx->uidnext <= cmdp->uid) {
+	if (response != RESP_OK) {
 		imap_find_new_msgs_p4( ctx, gcmd, response );
+		return;
+	}
+	if (!ctx->uidnext) {
+		// We are assuming that the new messages were not in fact instantly deleted.
+		error( "IMAP error: re-querying server for highest UID failed\n" );
+		imap_find_new_msgs_p4( ctx, gcmd, RESP_NO );
 		return;
 	}
 	INIT_IMAP_CMD(imap_cmd_find_new_t, cmd, cmdp->callback, cmdp->callback_aux)
