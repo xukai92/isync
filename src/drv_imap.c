@@ -1173,7 +1173,7 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 		if (!(arg = next_arg( &s )) ||
 		    (ctx->uidnext = strtoul( arg, &earg, 10 ), *earg))
 		{
-			error( "IMAP error: malformed NEXTUID status\n" );
+			error( "IMAP error: malformed UIDNEXT status\n" );
 			return RESP_CANCEL;
 		}
 	} else if (!strcmp( "CAPABILITY", arg )) {
