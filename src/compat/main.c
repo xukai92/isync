@@ -376,7 +376,7 @@ main( int argc, char **argv )
 			if (!p)
 				nfsnprintf( path2, sizeof(path2), "%s.mbsync", config );
 			else
-				nfsnprintf( path2, sizeof(path2), "%.*smb%s", p - config, config, p + 1 );
+				nfsnprintf( path2, sizeof(path2), "%.*smb%s", (int)(p - config), config, p + 1 );
 			outconfig = path2;
 		}
 		if ((fd = creat( outconfig, 0666 )) < 0) {

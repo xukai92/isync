@@ -259,7 +259,7 @@ write_imap_server( FILE *fp, config_t *cfg )
 			if (!p)
 				hl = nfsnprintf( buf, sizeof(buf), "%s", cfg->host );
 			else {
-				hl = nfsnprintf( buf, sizeof(buf), "%.*s", p - cfg->host, cfg->host );
+				hl = nfsnprintf( buf, sizeof(buf), "%.*s", (int)(p - cfg->host), cfg->host );
 				p2 = strrchr( buf, '.' );
 				if (p2)
 					hl = sprintf( buf, "%s", p2 + 1 );
