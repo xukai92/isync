@@ -59,7 +59,7 @@ log:
 
 cov-scan: clean
 	/opt/cov-analysis-*/bin/cov-build --dir cov-int $(MAKE)
-	tar cavf isync.tar.xz cov-int
+	tar cavf isync-cov.tar.xz cov-int
 
 deb:
 	CFLAGS= INSTALL= dpkg-buildpackage -b --no-sign
