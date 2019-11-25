@@ -702,7 +702,7 @@ sub test($$$@)
 	rmtree "far";
 
 	my $njl = (@nj - 1) * 2;
-	for (my $l = 2; $l < $njl; $l++) {
+	for (my $l = 1; $l <= $njl; $l++) {
 		mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 
 		my ($nxc, @nret) = runsync("-J$l", "4-interrupt.log");
@@ -721,7 +721,8 @@ sub test($$$@)
 			print "Options:\n";
 			print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
 			my @nnj = readfile("near/.mbsyncstate.journal");
-			print "Journal:\n".join("", @nnj[0..($l / 2 - 1)])."-------\n".join("", @nnj[($l / 2)..$#nnj])."\n";
+			my $ln = int($l / 2);
+			print "Journal:\n".join("", @nnj[0..$ln])."-------\n".join("", @nnj[($ln + 1)..$#nnj])."\n";
 			print "Full journal:\n".join("", @nj)."\n";
 			if (!$nxc) {
 				print "Expected result:\n";
