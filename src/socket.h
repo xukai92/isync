@@ -36,7 +36,8 @@ enum {
 	SSLv3 = 2,
 	TLSv1 = 4,
 	TLSv1_1 = 8,
-	TLSv1_2 = 16
+	TLSv1_2 = 16,
+	TLSv1_3 = 32
 };
 #endif
 

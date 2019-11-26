@@ -3194,7 +3194,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 #ifdef HAVE_LIBSSL
 	/* Legacy SSL options */
 	int require_ssl = -1, use_imaps = -1;
-	int use_sslv3 = -1, use_tlsv1 = -1, use_tlsv11 = -1, use_tlsv12 = -1;
+	int use_sslv3 = -1, use_tlsv1 = -1, use_tlsv11 = -1, use_tlsv12 = -1, use_tlsv13 = -1;
 #endif
 	/* Legacy SASL option */
 	int require_cram = -1;
@@ -3234,7 +3234,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				arg += 6;
 				server->ssl_type = SSL_IMAPS;
 				if (server->sconf.ssl_versions == -1)
-					server->sconf.ssl_versions = SSLv3 | TLSv1 | TLSv1_1 | TLSv1_2;
+					server->sconf.ssl_versions = SSLv3 | TLSv1 | TLSv1_1 | TLSv1_2 | TLSv1_3;
 			} else
 #endif
 			if (starts_with( arg, -1, "imap:", 5 ))
@@ -3333,6 +3333,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 					server->sconf.ssl_versions |= TLSv1_1;
 				} else if (!strcasecmp( "TLSv1.2", arg )) {
 					server->sconf.ssl_versions |= TLSv1_2;
+				} else if (!strcasecmp( "TLSv1.3", arg )) {
+					server->sconf.ssl_versions |= TLSv1_3;
 				} else {
 					error( "%s:%d: Unrecognized SSL version\n", cfg->file, cfg->line );
 					cfg->err = 1;
@@ -3352,6 +3354,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			use_tlsv11 = parse_bool( cfg );
 		else if (!strcasecmp( "UseTLSv1.2", cfg->cmd ))
 			use_tlsv12 = parse_bool( cfg );
+		else if (!strcasecmp( "UseTLSv1.3", cfg->cmd ))
+			use_tlsv13 = parse_bool( cfg );
 #endif
 		else if (!strcasecmp( "AuthMech", cfg->cmd ) ||
 		         !strcasecmp( "AuthMechs", cfg->cmd )) {
@@ -3412,7 +3416,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			return 1;
 		}
 #ifdef HAVE_LIBSSL
-		if ((use_sslv3 & use_tlsv1 & use_tlsv11 & use_tlsv12) != -1 || use_imaps >= 0 || require_ssl >= 0) {
+		if ((use_sslv3 & use_tlsv1 & use_tlsv11 & use_tlsv12 & use_tlsv13) != -1 || use_imaps >= 0 || require_ssl >= 0) {
 			if (server->ssl_type >= 0 || server->sconf.ssl_versions >= 0) {
 				error( "%s '%s': The deprecated UseSSL*, UseTLS*, UseIMAPS, and RequireSSL options are mutually exclusive with SSLType and SSLVersions.\n", type, name );
 				cfg->err = 1;
@@ -3423,7 +3427,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 					(use_sslv3 != 1 ? 0 : SSLv3) |
 					(use_tlsv1 == 0 ? 0 : TLSv1) |
 					(use_tlsv11 != 1 ? 0 : TLSv1_1) |
-					(use_tlsv12 != 1 ? 0 : TLSv1_2);
+					(use_tlsv12 != 1 ? 0 : TLSv1_2) |
+					(use_tlsv13 != 1 ? 0 : TLSv1_3);
 			if (use_imaps == 1) {
 				server->ssl_type = SSL_IMAPS;
 			} else if (require_ssl) {
@@ -3441,7 +3446,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			}
 		} else {
 			if (server->sconf.ssl_versions < 0)
-				server->sconf.ssl_versions = TLSv1 | TLSv1_1 | TLSv1_2;
+				server->sconf.ssl_versions = TLSv1 | TLSv1_1 | TLSv1_2 | TLSv1_3;
 			if (server->ssl_type < 0)
 				server->ssl_type = server->sconf.tunnel ? SSL_None : SSL_STARTTLS;
 		}

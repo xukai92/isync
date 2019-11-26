@@ -260,6 +260,10 @@ init_ssl_ctx( const server_conf_t *conf )
 	if (!(conf->ssl_versions & TLSv1_2))
 		options |= SSL_OP_NO_TLSv1_2;
 #endif
+#ifdef SSL_OP_NO_TLSv1_3
+	if (!(conf->ssl_versions & TLSv1_3))
+		options |= SSL_OP_NO_TLSv1_3;
+#endif
 
 	SSL_CTX_set_options( mconf->SSLContext, options );
 

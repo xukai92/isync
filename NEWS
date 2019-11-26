@@ -2,6 +2,8 @@
 
 The 'isync' compatibility wrapper was removed.
 
+Added support for disabling TLS v1.3 - adjust SSLVersions if you set it.
+
 The IMAP '$Forwarded' / Maildir 'P' (passed) flag is supported now.
 
 Support for configuring a TLS cipher string was added.
