@@ -315,6 +315,15 @@ Zero means unlimited.
 Specify the login name on the IMAP server.
 .
 .TP
+\fBUserCmd\fR [\fB+\fR]\fIcommand\fR
+Specify a shell command to obtain a user rather than specifying a
+user directly. This allows you to script retrieving user names.
+The command must produce exactly one line on stdout; the trailing newline
+is optional.
+Prepend \fB+\fR to the command to indicate that it produces TTY output
+(e.g., a prompt); failure to do so will merely produce messier output.
+.
+.TP
 \fBPass\fR \fIpassword\fR
 Specify the password for \fIusername\fR on the IMAP server.
 Note that this option is \fInot\fR required.

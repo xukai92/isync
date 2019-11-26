@@ -50,6 +50,7 @@ typedef struct imap_server_conf {
 	char *name;
 	server_conf_t sconf;
 	char *user;
+	char *user_cmd;
 	char *pass;
 	char *pass_cmd;
 	int max_in_progress;
@@ -1936,12 +1937,50 @@ imap_open_store_authenticate_p3( imap_store_t *ctx, imap_cmd_t *cmd ATTR_UNUSED,
 }
 #endif
 
+static char *
+cred_from_cmd( const char *cred, const char *cmd, const char *srv_name )
+{
+	FILE *fp;
+	int ret;
+	char buffer[8192];  // Hopefully more than enough room for XOAUTH2, etc. tokens
+
+	if (*cmd == '+') {
+		flushn();
+		cmd++;
+	}
+	if (!(fp = popen( cmd, "r" ))) {
+	  pipeerr:
+		sys_error( "Skipping account %s, %s failed", srv_name, cred );
+		return NULL;
+	}
+	if (!fgets( buffer, sizeof(buffer), fp ))
+		buffer[0] = 0;
+	if ((ret = pclose( fp )) < 0)
+		goto pipeerr;
+	if (ret) {
+		if (WIFSIGNALED( ret ))
+			error( "Skipping account %s, %s crashed\n", srv_name, cred );
+		else
+			error( "Skipping account %s, %s exited with status %d\n", srv_name, cred, WEXITSTATUS( ret ) );
+		return NULL;
+	}
+	if (!buffer[0]) {
+		error( "Skipping account %s, %s produced no output\n", srv_name, cred );
+		return NULL;
+	}
+	buffer[strcspn( buffer, "\n" )] = 0; /* Strip trailing newline */
+	return nfstrdup( buffer );
+}
+
 static const char *
 ensure_user( imap_server_conf_t *srvc )
 {
 	if (!srvc->user) {
-		error( "Skipping account %s, no user\n", srvc->name );
-		return NULL;
+		if (srvc->user_cmd) {
+			srvc->user = cred_from_cmd( "UserCmd", srvc->user_cmd, srvc->name );
+		} else {
+			error( "Skipping account %s, no user\n", srvc->name );
+		}
 	}
 	return srvc->user;
 }
@@ -1949,56 +1988,25 @@ ensure_user( imap_server_conf_t *srvc )
 static const char *
 ensure_password( imap_server_conf_t *srvc )
 {
-	char *cmd = srvc->pass_cmd;
-
-	if (cmd) {
-		FILE *fp;
-		int ret;
-		char buffer[8192];  // Hopefully more than enough room for XOAUTH2, etc. tokens
-
-		if (*cmd == '+') {
+	if (!srvc->pass) {
+		if (srvc->pass_cmd) {
+			srvc->pass = cred_from_cmd( "PassCmd", srvc->pass_cmd, srvc->name );
+		} else {
 			flushn();
-			cmd++;
+			char prompt[80];
+			sprintf( prompt, "Password (%s): ", srvc->name );
+			char *pass = getpass( prompt );
+			if (!pass) {
+				perror( "getpass" );
+				exit( 1 );
+			}
+			if (!*pass) {
+				error( "Skipping account %s, no password\n", srvc->name );
+				return NULL;
+			}
+			/* getpass() returns a pointer to a static buffer. Make a copy for long term storage. */
+			srvc->pass = nfstrdup( pass );
 		}
-		if (!(fp = popen( cmd, "r" ))) {
-		  pipeerr:
-			sys_error( "Skipping account %s, password command failed", srvc->name );
-			return NULL;
-		}
-		if (!fgets( buffer, sizeof(buffer), fp ))
-			buffer[0] = 0;
-		if ((ret = pclose( fp )) < 0)
-			goto pipeerr;
-		if (ret) {
-			if (WIFSIGNALED( ret ))
-				error( "Skipping account %s, password command crashed\n", srvc->name );
-			else
-				error( "Skipping account %s, password command exited with status %d\n", srvc->name, WEXITSTATUS( ret ) );
-			return NULL;
-		}
-		if (!buffer[0]) {
-			error( "Skipping account %s, password command produced no output\n", srvc->name );
-			return NULL;
-		}
-		buffer[strcspn( buffer, "\n" )] = 0; /* Strip trailing newline */
-		free( srvc->pass ); /* From previous runs */
-		srvc->pass = nfstrdup( buffer );
-	} else if (!srvc->pass) {
-		char *pass, prompt[80];
-
-		flushn();
-		sprintf( prompt, "Password (%s): ", srvc->name );
-		pass = getpass( prompt );
-		if (!pass) {
-			perror( "getpass" );
-			exit( 1 );
-		}
-		if (!*pass) {
-			error( "Skipping account %s, no password\n", srvc->name );
-			return NULL;
-		}
-		/* getpass() returns a pointer to a static buffer. Make a copy for long term storage. */
-		srvc->pass = nfstrdup( pass );
 	}
 	return srvc->pass;
 }
@@ -2181,6 +2189,17 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	const char *saslavail;
 	char saslmechs[1024], *saslend = saslmechs;
 #endif
+
+	// Ensure that there are no leftovers from previous runs. This is needed in case
+	// the credentials have a timing dependency or otherwise lose validity after use.
+	if (srvc->user_cmd) {
+		free( srvc->user );
+		srvc->user = NULL;
+	}
+	if (srvc->pass_cmd) {
+		free( srvc->pass );
+		srvc->pass = NULL;
+	}
 
 	info( "Logging in...\n" );
 	for (mech = srvc->auth_mechs; mech; mech = mech->next) {
@@ -3268,6 +3287,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		}
 		else if (!strcasecmp( "User", cfg->cmd ))
 			server->user = nfstrdup( cfg->val );
+		else if (!strcasecmp( "UserCmd", cfg->cmd ))
+			server->user_cmd = nfstrdup( cfg->val );
 		else if (!strcasecmp( "Pass", cfg->cmd ))
 			server->pass = nfstrdup( cfg->val );
 		else if (!strcasecmp( "PassCmd", cfg->cmd ))
@@ -3428,6 +3449,11 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 	if (!store || !store->server) {
 		if (!server->sconf.tunnel && !server->sconf.host) {
 			error( "%s '%s' has neither Tunnel nor Host\n", type, name );
+			cfg->err = 1;
+			return 1;
+		}
+		if (server->user && server->user_cmd) {
+			error( "%s '%s' has both User and UserCmd\n", type, name );
 			cfg->err = 1;
 			return 1;
 		}
