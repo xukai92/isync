@@ -33,7 +33,6 @@
 # include <openssl/ssl.h>
 
 enum {
-	SSLv3 = 2,
 	TLSv1 = 4,
 	TLSv1_1 = 8,
 	TLSv1_2 = 16,

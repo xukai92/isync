@@ -233,7 +233,6 @@ static int
 init_ssl_ctx( const server_conf_t *conf )
 {
 	server_conf_t *mconf = (server_conf_t *)conf;
-	int options = 0;
 
 	if (conf->SSLContext)
 		return conf->ssl_ctx_valid;
@@ -248,8 +247,7 @@ init_ssl_ctx( const server_conf_t *conf )
 		return 0;
 	}
 
-	if (!(conf->ssl_versions & SSLv3))
-		options |= SSL_OP_NO_SSLv3;
+	int options = SSL_OP_NO_SSLv3;
 	if (!(conf->ssl_versions & TLSv1))
 		options |= SSL_OP_NO_TLSv1;
 #ifdef SSL_OP_NO_TLSv1_1
