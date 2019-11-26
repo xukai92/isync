@@ -66,6 +66,7 @@ typedef struct {
 	imap_server_conf_t *server;
 	char delimiter;
 	char use_namespace;
+	char use_lsub;
 } imap_store_conf_t;
 
 typedef struct {
@@ -1453,7 +1454,7 @@ imap_socket_read( void *aux )
 				error( "Error from IMAP server: %s\n", cmd );
 			} else if (!strcmp( "CAPABILITY", arg )) {
 				parse_capability( ctx, cmd );
-			} else if (!strcmp( "LIST", arg )) {
+			} else if (!strcmp( "LIST", arg ) || !strcmp( "LSUB", arg )) {
 				resp = parse_list( ctx, cmd, parse_list_rsp );
 				goto listret;
 			} else if (!strcmp( "NAMESPACE", arg )) {
@@ -3083,6 +3084,7 @@ imap_list_store( store_t *gctx, int flags,
                  void (*cb)( int sts, string_list_t *boxes, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
+	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
 	INIT_REFCOUNTED_STATE(imap_list_store_state_t, sts, cb, aux)
 
 	// ctx->prefix may be empty, "INBOX.", or something else.
@@ -3106,14 +3108,14 @@ imap_list_store( store_t *gctx, int flags,
 		if (pfx_is_empty)
 			ctx->listed |= LIST_INBOX;
 		imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_list_store_p2,
-		           "LIST \"\" \"%\\s*\"", ctx->prefix );
+		           "%s \"\" \"%\\s*\"", cfg->use_lsub ? "LSUB" : "LIST", ctx->prefix );
 	}
 	if (((flags & LIST_INBOX) || pfx_is_inbox) && !pfx_is_empty && !(ctx->listed & LIST_INBOX)) {
 		ctx->listed |= LIST_INBOX;
 		if (pfx_is_inbox)
 			ctx->listed |= LIST_PATH;
 		imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_list_store_p2,
-		           "LIST \"\" INBOX*" );
+		           "%s \"\" INBOX*", cfg->use_lsub ? "LSUB" : "LIST" );
 	}
 	imap_list_store_p3( ctx, sts );
 }
@@ -3373,6 +3375,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				store->server = srv;
 			} else if (!strcasecmp( "UseNamespace", cfg->cmd ))
 				store->use_namespace = parse_bool( cfg );
+			else if (!strcasecmp( "SubscribedOnly", cfg->cmd ))
+				store->use_lsub = parse_bool( cfg );
 			else if (!strcasecmp( "Path", cfg->cmd ))
 				store->gen.path = nfstrdup( cfg->val );
 			else if (!strcasecmp( "PathDelimiter", cfg->cmd )) {

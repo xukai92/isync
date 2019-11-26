@@ -466,6 +466,14 @@ Specify the server's hierarchy delimiter.
 Do \fInot\fR abuse this to re-interpret the hierarchy.
 Use \fBFlatten\fR instead.
 .
+.TP
+\fBSubscribedOnly\fR \fByes\fR|\fBno\fR
+Selects whether to synchronize only mailboxes that are subscribed to on the
+IMAP server. In technical terms, if this option is set, \fBmbsync\fR will use
+the IMAP command LSUB instead of LIST to look for mailboxes in this Store.
+This option make sense only in conjunction with \fBPatterns\fR.
+(Default: \fBno\fR)
+.
 .SS Channels
 .TP
 \fBChannel\fR \fIname\fR
