@@ -341,6 +341,28 @@ Prepend \fB+\fR to the command to indicate that it produces TTY output
 messier output.
 .
 .TP
+\fBUseKeychain\fR \fByes\fR|\fBno\fR
+Whether to use the macOS Keychain to obtain the password.
+(Default: \fBno\fR)
+.IP
+The neccessary keychain item can be created this way:
+.RS
+.IP
+.nh
+.B security add-internet-password \-r imap \-s
+.I Host
+.B \-a
+.I User
+.B \-w
+.I password
+[
+.B \-T
+.I /path/to/mbsync
+]
+.hy
+.RE
+.
+.TP
 \fBTunnel\fR \fIcommand\fR
 Specify a command to run to establish a connection rather than opening a TCP
 socket.  This allows you to run an IMAP session over an SSH tunnel, for

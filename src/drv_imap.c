@@ -41,6 +41,10 @@
 # include <sasl/saslutil.h>
 #endif
 
+#ifdef HAVE_MACOS_KEYCHAIN
+# include <Security/Security.h>
+#endif
+
 #ifdef HAVE_LIBSSL
 enum { SSL_None, SSL_STARTTLS, SSL_IMAPS };
 #endif
@@ -58,6 +62,9 @@ typedef struct imap_server_conf {
 	string_list_t *auth_mechs;
 #ifdef HAVE_LIBSSL
 	char ssl_type;
+#endif
+#ifdef HAVE_MACOS_KEYCHAIN
+	char use_keychain;
 #endif
 	char failed;
 } imap_server_conf_t;
@@ -1991,6 +1998,31 @@ ensure_password( imap_server_conf_t *srvc )
 	if (!srvc->pass) {
 		if (srvc->pass_cmd) {
 			srvc->pass = cred_from_cmd( "PassCmd", srvc->pass_cmd, srvc->name );
+#ifdef HAVE_MACOS_KEYCHAIN
+		} else if (srvc->use_keychain) {
+			void *password_data;
+			UInt32 password_length;
+			OSStatus ret = SecKeychainFindInternetPassword(
+					NULL,  // keychainOrArray
+					strlen( srvc->sconf.host ), srvc->sconf.host,
+					0, NULL,  // securityDomain
+					strlen( srvc->user ), srvc->user,
+					0, NULL,  // path
+					0,  // port - we could use it, but it seems pointless
+					kSecProtocolTypeIMAP,
+					kSecAuthenticationTypeDefault,
+					&password_length, &password_data,
+					NULL );  // itemRef
+			if (ret != errSecSuccess) {
+				CFStringRef errmsg = SecCopyErrorMessageString( ret, NULL );
+				error( "Looking up Keychain failed: %s\n",
+				       CFStringGetCStringPtr( errmsg, kCFStringEncodingUTF8 ) );
+				CFRelease( errmsg );
+				return NULL;
+			}
+			srvc->pass = nfstrndup( password_data, password_length );
+			SecKeychainItemFreeContent( NULL, password_data );
+#endif /* HAVE_MACOS_KEYCHAIN */
 		} else {
 			flushn();
 			char prompt[80];
@@ -3293,6 +3325,10 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			server->pass = nfstrdup( cfg->val );
 		else if (!strcasecmp( "PassCmd", cfg->cmd ))
 			server->pass_cmd = nfstrdup( cfg->val );
+#ifdef HAVE_MACOS_KEYCHAIN
+		else if (!strcasecmp( "UseKeychain", cfg->cmd ))
+			server->use_keychain = parse_bool( cfg );
+#endif
 		else if (!strcasecmp( "Port", cfg->cmd )) {
 			int port = parse_int( cfg );
 			if ((unsigned)port > 0xffff) {
@@ -3462,6 +3498,13 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			cfg->err = 1;
 			return 1;
 		}
+#ifdef HAVE_MACOS_KEYCHAIN
+		if (server->use_keychain && (server->pass || server->pass_cmd)) {
+			error( "%s '%s' has UseKeychain enabled despite specifying Pass/PassCmd\n", type, name );
+			cfg->err = 1;
+			return 1;
+		}
+#endif
 #ifdef HAVE_LIBSSL
 		if ((use_tlsv1 & use_tlsv11 & use_tlsv12 & use_tlsv13) != -1 || use_imaps >= 0 || require_ssl >= 0) {
 			if (server->ssl_type >= 0 || server->sconf.ssl_versions >= 0) {
