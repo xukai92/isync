@@ -781,7 +781,7 @@ load_state( sync_vars_t *svars )
 				error( "Error: invalid sync state entry at %s:%d\n", svars->dname, line );
 				goto jbail;
 			}
-			srec = nfmalloc( sizeof(*srec) );
+			srec = nfcalloc( sizeof(*srec) );
 			srec->uid[M] = t1;
 			srec->uid[S] = t2;
 			s = fbuf;
@@ -806,15 +806,10 @@ load_state( sync_vars_t *svars )
 			} else if (srec->uid[S] == (uint)-2) {
 				srec->uid[S] = 0;
 				srec->status = S_PENDING;
-			} else
-				srec->status = 0;
-			srec->wstate = 0;
+			}
 			srec->flags = parse_flags( s );
 			debug( "  entry (%u,%u,%u,%s)\n", srec->uid[M], srec->uid[S], srec->flags,
 			       (srec->status & S_SKIPPED) ? "SKIP" : (srec->status & S_PENDING) ? "FAIL" : (srec->status & S_EXPIRED) ? "XPIRE" : "" );
-			srec->msg[M] = srec->msg[S] = 0;
-			srec->tuid[0] = 0;
-			srec->next = 0;
 			*svars->srecadd = srec;
 			svars->srecadd = &srec->next;
 			svars->nsrecs++;
@@ -908,7 +903,7 @@ load_state( sync_vars_t *svars )
 					svars->uidval[M] = t1;
 					svars->uidval[S] = t2;
 				} else if (c == '+') {
-					srec = nfmalloc( sizeof(*srec) );
+					srec = nfcalloc( sizeof(*srec) );
 					srec->uid[M] = t1;
 					srec->uid[S] = t2;
 					if (svars->newmaxuid[M] < t1)
@@ -916,12 +911,7 @@ load_state( sync_vars_t *svars )
 					if (svars->newmaxuid[S] < t2)
 						svars->newmaxuid[S] = t2;
 					debug( "  new entry(%u,%u)\n", t1, t2 );
-					srec->msg[M] = srec->msg[S] = 0;
 					srec->status = S_PENDING;
-					srec->wstate = 0;
-					srec->flags = 0;
-					srec->tuid[0] = 0;
-					srec->next = 0;
 					*svars->srecadd = srec;
 					svars->srecadd = &srec->next;
 					svars->nsrecs++;
@@ -1534,7 +1524,6 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			del[S] = no[S] && srec->uid[S];
 
 			for (t = 0; t < 2; t++) {
-				srec->aflags[t] = srec->dflags[t] = 0;
 				if (srec->msg[t] && (srec->msg[t]->flags & F_DELETED))
 					srec->wstate |= W_DEL(t);
 				if (del[t]) {
@@ -1618,19 +1607,13 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 					if (srec) {
 						debug( "  -> pair(%u,%u) exists\n", srec->uid[M], srec->uid[S] );
 					} else {
-						srec = nfmalloc( sizeof(*srec) );
-						srec->next = 0;
+						srec = nfcalloc( sizeof(*srec) );
 						*svars->srecadd = srec;
 						svars->srecadd = &srec->next;
 						svars->nsrecs++;
 						srec->status = S_PENDING;
-						srec->wstate = 0;
-						srec->flags = 0;
-						srec->tuid[0] = 0;
 						srec->uid[1-t] = tmsg->uid;
-						srec->uid[t] = 0;
 						srec->msg[1-t] = tmsg;
-						srec->msg[t] = 0;
 						tmsg->srec = srec;
 						if (svars->newmaxuid[1-t] < tmsg->uid)
 							svars->newmaxuid[1-t] = tmsg->uid;
