@@ -30,6 +30,9 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/wait.h>
+#ifdef __linux__
+# include <sys/prctl.h>
+#endif
 
 int DFlags;
 int JLimit;
@@ -144,17 +147,34 @@ crashHandler( int n )
 	dup2( 0, 1 );
 	dup2( 0, 2 );
 	error( "*** " EXE " caught signal %d. Starting debugger ...\n", n );
+#ifdef PR_SET_PTRACER
+	int pip[2];
+	if (pipe( pip ) < 0) {
+		perror( "pipe()" );
+		exit( 3 );
+	}
+#endif
 	switch ((dpid = fork())) {
 	case -1:
 		perror( "fork()" );
 		break;
 	case 0:
+#ifdef PR_SET_PTRACER
+		close( pip[1] );
+		read( pip[0], pbuf, 1 );
+		close( pip[0] );
+#endif
 		sprintf( pbuf, "%d", Pid );
 		sprintf( pabuf, "/proc/%d/exe", Pid );
 		execlp( "gdb", "gdb", pabuf, pbuf, (char *)0 );
 		perror( "execlp()" );
 		_exit( 1 );
 	default:
+#ifdef PR_SET_PTRACER
+		prctl( PR_SET_PTRACER, (ulong)dpid );
+		close( pip[1] );
+		close( pip[0] );
+#endif
 		waitpid( dpid, 0, 0 );
 		break;
 	}
