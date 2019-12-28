@@ -49,7 +49,7 @@ typedef struct store_conf {
 /* The order is according to alphabetical maildir flag sort */
 #define F_DRAFT	     (1<<0) /* Draft */
 #define F_FLAGGED    (1<<1) /* Flagged */
-#define F_PASSED     (1<<2) /* Passed */
+#define F_FORWARDED  (1<<2) /* Passed */
 #define F_ANSWERED   (1<<3) /* Replied */
 #define F_SEEN       (1<<4) /* Seen */
 #define F_DELETED    (1<<5) /* Trashed */
