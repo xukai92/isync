@@ -20,11 +20,16 @@ use warnings;
 use strict;
 use Cwd;
 use File::Path;
+use File::Temp 'tempdir';
 
 my $use_vg = $ENV{USE_VALGRIND};
 my $mbsync = getcwd()."/mbsync";
 
--d "tmp" or mkdir "tmp";
+if (!-d "tmp") {
+  unlink "tmp";
+  my $tdir = tempdir();
+  symlink $tdir, "tmp" or die "Cannot symlink temp directory: $!\n";
+}
 chdir "tmp" or die "Cannot enter temp direcory.\n";
 
 sub show($$$);
@@ -236,8 +241,6 @@ test("max messages + expunge", \@x50, \@X51, @O51);
 
 ################################################################################
 
-chdir "..";
-rmdir "tmp";
 print "OK.\n";
 exit 0;
 
