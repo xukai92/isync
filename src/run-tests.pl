@@ -482,8 +482,8 @@ sub mkchan($$@)
 	close FILE;
 }
 
-# $config, $boxname, $maxuid, @msgs
-sub ckbox($$$@)
+# $boxname, $maxuid, @msgs
+sub ckbox($$@)
 {
 	my ($bn, $MU, @MS) = @_;
 
