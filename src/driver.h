@@ -206,12 +206,12 @@ struct driver {
 	 * Consider only messages with UIDs between minuid and maxuid (inclusive)
 	 * and those named in the excs array (smaller than minuid).
 	 * The driver takes ownership of the excs array.
-	 * Messages starting with newuid need to have the TUID populated when OPEN_FIND is set.
-	 * Messages up to seenuid need to have the Message-Id populated when OPEN_OLD_IDS is set.
-	 * Messages up to seenuid need to have the size populated when OPEN_OLD_SIZE is set;
-	 * likewise messages above seenuid when OPEN_NEW_SIZE is set.
+	 * Messages starting with finduid need to have the TUID populated when OPEN_FIND is set.
+	 * Messages up to pairuid need to have the Message-Id populated when OPEN_OLD_IDS is set.
+	 * Messages up to newuid need to have the size populated when OPEN_OLD_SIZE is set;
+	 * likewise messages above newuid when OPEN_NEW_SIZE is set.
 	 * The returned message list remains owned by the driver. */
-	void (*load_box)( store_t *ctx, uint minuid, uint maxuid, uint newuid, uint seenuid, uint_array_t excs,
+	void (*load_box)( store_t *ctx, uint minuid, uint maxuid, uint finduid, uint pairuid, uint newuid, uint_array_t excs,
 	                  void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux );
 
 	/* Fetch the contents and flags of the given message from the current mailbox. */

@@ -198,8 +198,8 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# DEFINE load_box_pre_print_args
 	static char ubuf[12];
 //# END
-//# DEFINE load_box_print_fmt_args , [%u,%s] (new >= %u, seen <= %u)
-//# DEFINE load_box_print_pass_args , minuid, (maxuid == UINT_MAX) ? "inf" : (nfsnprintf( ubuf, sizeof(ubuf), "%u", maxuid ), ubuf), newuid, seenuid
+//# DEFINE load_box_print_fmt_args , [%u,%s] (find >= %u, paired <= %u, new > %u)
+//# DEFINE load_box_print_pass_args , minuid, (maxuid == UINT_MAX) ? "inf" : (nfsnprintf( ubuf, sizeof(ubuf), "%u", maxuid ), ubuf), finduid, pairuid, newuid
 //# DEFINE load_box_print_args
 	if (excs.size) {
 		debugn( "  excs:" );

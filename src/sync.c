@@ -170,7 +170,7 @@ typedef struct {
 	uint newmaxuid[2];  // highest UID that is currently being propagated
 	uint uidval[2];     // UID validity value
 	uint newuidval[2];  // UID validity obtained from driver
-	uint newuid[2];     // TUID lookup makes sense only for UIDs >= this
+	uint finduid[2];    // TUID lookup makes sense only for UIDs >= this
 	uint maxxfuid;      // highest expired UID on far side
 	uchar good_flags[2], bad_flags[2];
 } sync_vars_t;
@@ -896,7 +896,7 @@ load_state( sync_vars_t *svars )
 				if (c == 'S')
 					svars->maxuid[t1] = svars->newmaxuid[t1];
 				else if (c == 'F')
-					svars->newuid[t1] = t2;
+					svars->finduid[t1] = t2;
 				else if (c == 'T')
 					*uint_array_append( &svars->trashed_msgs[t1] ) = t2;
 				else if (c == '!')
@@ -1350,27 +1350,19 @@ static void box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msg
 static void
 load_box( sync_vars_t *svars, int t, uint minwuid, uint_array_t mexcs )
 {
-	uint maxwuid, seenuid;
+	uint maxwuid = 0, pairuid = UINT_MAX;
 
 	if (svars->opts[t] & OPEN_NEW) {
 		if (minwuid > svars->maxuid[t] + 1)
 			minwuid = svars->maxuid[t] + 1;
 		maxwuid = UINT_MAX;
-		if (svars->opts[t] & (OPEN_OLD_IDS|OPEN_OLD_SIZE))
-			seenuid = get_seenuid( svars, t );
-		else
-			seenuid = 0;
+		if (svars->opts[t] & OPEN_OLD_IDS)  // Implies OPEN_OLD
+			pairuid = get_seenuid( svars, t );
 	} else if (svars->opts[t] & OPEN_OLD) {
-		maxwuid = seenuid = get_seenuid( svars, t );
-	} else
-		maxwuid = seenuid = 0;
-	if (seenuid < svars->maxuid[t]) {
-		/* We cannot rely on the maxuid, as uni-directional syncing does not update it.
-		 * But if it is there, use it to avoid a possible gap in the fetched range. */
-		seenuid = svars->maxuid[t];
+		maxwuid = get_seenuid( svars, t );
 	}
 	info( "Loading %s box...\n", str_fn[t] );
-	svars->drv[t]->load_box( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], seenuid, mexcs, box_loaded, AUX );
+	svars->drv[t]->load_box( svars->ctx[t], minwuid, maxwuid, svars->finduid[t], pairuid, svars->maxuid[t], mexcs, box_loaded, AUX );
 }
 
 typedef struct {
@@ -1814,8 +1806,8 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	if (UseFSync)
 		fdatasync( fileno( svars->jfp ) );
 	for (t = 0; t < 2; t++) {
-		svars->newuid[t] = svars->drv[t]->get_uidnext( svars->ctx[t] );
-		JLOG( "F %d %u", (t, svars->newuid[t]), "save UIDNEXT of %s", str_fn[t] );
+		svars->finduid[t] = svars->drv[t]->get_uidnext( svars->ctx[t] );
+		JLOG( "F %d %u", (t, svars->finduid[t]), "save UIDNEXT of %s", str_fn[t] );
 		svars->new_msgs[t] = svars->msgs[1-t];
 		msgs_copied( svars, t );
 		if (check_cancel( svars ))
@@ -1921,7 +1913,7 @@ msgs_copied( sync_vars_t *svars, int t )
 
 	if (svars->state[t] & ST_FIND_NEW) {
 		debug( "finding just copied messages on %s\n", str_fn[t] );
-		svars->drv[t]->find_new_msgs( svars->ctx[t], svars->newuid[t], msgs_found_new, AUX );
+		svars->drv[t]->find_new_msgs( svars->ctx[t], svars->finduid[t], msgs_found_new, AUX );
 	} else {
 		msgs_new_done( svars, t );
 	}

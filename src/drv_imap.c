@@ -2683,7 +2683,7 @@ static void imap_submit_load( imap_store_t *, const char *, int, imap_load_box_s
 static void imap_submit_load_p3( imap_store_t *ctx, imap_load_box_state_t * );
 
 static void
-imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenuid, uint_array_t excs,
+imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint finduid, uint pairuid, uint newuid, uint_array_t excs,
                void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -2716,11 +2716,11 @@ imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenui
 			uint nranges = 1;
 			if (ctx->opts & (OPEN_OLD_SIZE | OPEN_NEW_SIZE))
 				imap_set_range( ranges, &nranges, shifted_bit( ctx->opts, OPEN_OLD_SIZE, WantSize),
-				                                  shifted_bit( ctx->opts, OPEN_NEW_SIZE, WantSize), seenuid );
+				                                  shifted_bit( ctx->opts, OPEN_NEW_SIZE, WantSize), newuid );
 			if (ctx->opts & OPEN_FIND)
-				imap_set_range( ranges, &nranges, 0, WantTuids, newuid - 1 );
+				imap_set_range( ranges, &nranges, 0, WantTuids, finduid - 1 );
 			if (ctx->opts & OPEN_OLD_IDS)
-				imap_set_range( ranges, &nranges, WantMsgids, 0, seenuid );
+				imap_set_range( ranges, &nranges, WantMsgids, 0, pairuid );
 			for (uint r = 0; r < nranges; r++) {
 				sprintf( buf, "%u:%u", ranges[r].first, ranges[r].last );
 				imap_submit_load( ctx, buf, ranges[r].flags, sts );

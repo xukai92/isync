@@ -70,7 +70,7 @@ typedef struct {
 typedef struct {
 	store_t gen;
 	int uvfd, uvok, is_inbox, fresh[3];
-	uint opts, minuid, maxuid, newuid, seenuid, uidvalidity, nuid;
+	uint opts, minuid, maxuid, finduid, pairuid, newuid, uidvalidity, nuid;
 	uint_array_t excs;
 	char *path; /* own */
 	char *trash;
@@ -1139,9 +1139,9 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 				free( entry->base );
 				entry->base = nfstrndup( buf + bl + 4, (size_t)fnl );
 			}
-			int want_size = (uid > ctx->seenuid) ? (ctx->opts & OPEN_NEW_SIZE) : (ctx->opts & OPEN_OLD_SIZE);
-			int want_tuid = ((ctx->opts & OPEN_FIND) && uid >= ctx->newuid);
-			int want_msgid = ((ctx->opts & OPEN_OLD_IDS) && uid <= ctx->seenuid);
+			int want_size = (uid > ctx->newuid) ? (ctx->opts & OPEN_NEW_SIZE) : (ctx->opts & OPEN_OLD_SIZE);
+			int want_tuid = ((ctx->opts & OPEN_FIND) && uid >= ctx->finduid);
+			int want_msgid = ((ctx->opts & OPEN_OLD_IDS) && uid <= ctx->pairuid);
 			if (!want_size && !want_tuid && !want_msgid)
 				continue;
 			if (!fnl)
@@ -1357,7 +1357,7 @@ maildir_confirm_box_empty( store_t *gctx )
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	msg_t_array_alloc_t msglist;
 
-	ctx->excs.size = ctx->minuid = ctx->maxuid = ctx->newuid = 0;
+	ctx->excs.size = ctx->minuid = ctx->maxuid = ctx->finduid = 0;
 
 	if (maildir_scan( ctx, &msglist ) != DRV_OK)
 		return DRV_BOX_BAD;
@@ -1435,7 +1435,7 @@ maildir_prepare_load_box( store_t *gctx, uint opts )
 }
 
 static void
-maildir_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenuid, uint_array_t excs,
+maildir_load_box( store_t *gctx, uint minuid, uint maxuid, uint finduid, uint pairuid, uint newuid, uint_array_t excs,
                   void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
@@ -1445,8 +1445,9 @@ maildir_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint see
 
 	ctx->minuid = minuid;
 	ctx->maxuid = maxuid;
+	ctx->finduid = finduid;
+	ctx->pairuid = pairuid;
 	ctx->newuid = newuid;
-	ctx->seenuid = seenuid;
 	ARRAY_SQUEEZE( &excs );
 	ctx->excs = excs;
 
