@@ -1252,9 +1252,9 @@ box_opened2( sync_vars_t *svars, int t )
 				opts[1-t] |= OPEN_FLAGS;
 			if (chan->stores[t]->max_size != INT_MAX) {
 				if (chan->ops[t] & OP_RENEW)
-					opts[1-t] |= OPEN_OLD_SIZE;
+					opts[1-t] |= OPEN_FLAGS|OPEN_OLD_SIZE;
 				if (chan->ops[t] & OP_NEW)
-					opts[1-t] |= OPEN_NEW_SIZE;
+					opts[1-t] |= OPEN_FLAGS|OPEN_NEW_SIZE;
 			}
 		}
 		if (chan->ops[t] & OP_EXPUNGE) {
