@@ -15,6 +15,8 @@ The IMAP user query can be scripted now.
 
 Added built-in support for macOS Keychain.
 
+Messages excluded by MaxSize will now result in placeholders.
+
 The use of Master/Slave terminology has been deprecated.
 
 [1.3.0]

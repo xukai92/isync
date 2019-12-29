@@ -136,20 +136,23 @@ make_flags( uchar flags, char *buf )
 #define S_EXPIRE       (1<<0)  // the entry is being expired (near side message removal scheduled)
 #define S_EXPIRED      (1<<1)  // the entry is expired (near side message removal confirmed)
 #define S_PENDING      (1<<2)  // the entry is new and awaits propagation (possibly a retry)
-#define S_SKIPPED      (1<<3)  // the entry was not propagated (message is too big)
+#define S_DUMMY(fn)    (1<<(3+(fn)))  // f/n message is only a placeholder
+#define S_SKIPPED      (1<<5)  // pre-1.4 legacy: the entry was not propagated (message is too big)
 #define S_DEAD         (1<<7)  // ephemeral: the entry was killed and should be ignored
 
 // Ephemeral working set.
 #define W_NEXPIRE      (1<<0)  // temporary: new expiration state
 #define W_DELETE       (1<<1)  // ephemeral: flags propagation is a deletion
 #define W_DEL(fn)      (1<<(2+(fn)))  // ephemeral: f/n message would be subject to expunge
+#define W_UPGRADE      (1<<4)  // ephemeral: upgrading placeholder, do not apply MaxSize
+#define W_PURGE        (1<<5)  // ephemeral: placeholder is being nuked
 
 typedef struct sync_rec {
 	struct sync_rec *next;
 	/* string_list_t *keywords; */
 	uint uid[2];
 	message_t *msg[2];
-	uchar status, wstate, flags, aflags[2], dflags[2];
+	uchar status, wstate, flags, pflags, aflags[2], dflags[2];
 	char tuid[TUIDL];
 } sync_rec_t;
 
@@ -274,6 +277,7 @@ assign_uid( sync_vars_t *svars, sync_rec_t *srec, int t, uint uid )
 	if (uid == svars->maxuid[t] + 1)
 		svars->maxuid[t] = uid;
 	srec->status &= ~S_PENDING;
+	srec->wstate &= ~W_UPGRADE;
 	srec->tuid[0] = 0;
 }
 
@@ -353,6 +357,7 @@ typedef struct copy_vars {
 	sync_rec_t *srec; /* also ->tuid */
 	message_t *msg;
 	msg_data_t data;
+	int minimal;
 } copy_vars_t;
 
 static void msg_fetched( int sts, void *aux );
@@ -365,7 +370,7 @@ copy_msg( copy_vars_t *vars )
 	t ^= 1;
 	vars->data.flags = vars->msg->flags;
 	vars->data.date = svars->chan->use_internal_date ? -1 : 0;
-	svars->drv[t]->fetch_msg( svars->ctx[t], vars->msg, &vars->data, msg_fetched, vars );
+	svars->drv[t]->fetch_msg( svars->ctx[t], vars->msg, &vars->data, vars->minimal, msg_fetched, vars );
 }
 
 static void msg_stored( int sts, uint uid, void *aux );
@@ -405,8 +410,10 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 {
 	char *in_buf = vars->data.data;
 	uint in_len = vars->data.len;
-	uint idx = 0, sbreak = 0, ebreak = 0;
+	uint idx = 0, sbreak = 0, ebreak = 0, break2 = 0;
 	uint lines = 0, hdr_crs = 0, bdy_crs = 0, app_cr = 0, extra = 0;
+	uint add_subj = 0;
+
 	if (vars->srec) {
 	  nloop: ;
 		uint start = idx;
@@ -416,14 +423,29 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 			if (c == '\r') {
 				line_crs++;
 			} else if (c == '\n') {
-				if (starts_with_upper( in_buf + start, (int)(in_len - start), "X-TUID: ", 8 )) {
+				if (!ebreak && starts_with_upper( in_buf + start, (int)(in_len - start), "X-TUID: ", 8 )) {
 					extra = (sbreak = start) - (ebreak = idx);
-					goto oke;
+					if (!vars->minimal)
+						goto oke;
+				} else {
+					if (!break2 && vars->minimal && !strncasecmp( in_buf + start, "Subject:", 8 )) {
+						break2 = start + 8;
+						if (in_buf[break2] == ' ')
+							break2++;
+					}
+					lines++;
+					hdr_crs += line_crs;
 				}
-				lines++;
-				hdr_crs += line_crs;
 				if (idx - line_crs - 1 == start) {
-					sbreak = ebreak = start;
+					if (!ebreak)
+						sbreak = ebreak = start;
+					if (vars->minimal) {
+						in_len = idx;
+						if (!break2) {
+							break2 = start;
+							add_subj = 1;
+						}
+					}
 					goto oke;
 				}
 				goto nloop;
@@ -449,10 +471,36 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 			extra += lines;
 	}
 
+	uint dummy_msg_len = 0;
+	char dummy_msg_buf[180];
+	static const char dummy_pfx[] = "[placeholder] ";
+	static const char dummy_subj[] = "Subject: [placeholder] (No Subject)";
+	static const char dummy_msg[] =
+		"Having a size of %s, this message is over the MaxSize limit.%s"
+		"Flag it and sync again (Sync mode ReNew) to fetch its real contents.%s";
+
+	if (vars->minimal) {
+		char sz[32];
+
+		if (vars->msg->size < 1024000)
+			sprintf( sz, "%dKiB", (int)(vars->msg->size >> 10) );
+		else
+			sprintf( sz, "%.1fMiB", vars->msg->size / 1048576. );
+		const char *nl = app_cr ? "\r\n" : "\n";
+		dummy_msg_len = (uint)sprintf( dummy_msg_buf, dummy_msg, sz, nl, nl );
+		extra += dummy_msg_len;
+		extra += add_subj ? strlen(dummy_subj) + app_cr + 1 : strlen(dummy_pfx);
+	}
+
 	vars->data.len = in_len + extra;
 	char *out_buf = vars->data.data = nfmalloc( vars->data.len );
 	idx = 0;
 	if (vars->srec) {
+		if (break2 && break2 < sbreak) {
+			copy_msg_bytes( &out_buf, in_buf, &idx, break2, in_cr, out_cr );
+			memcpy( out_buf, dummy_pfx, strlen(dummy_pfx) );
+			out_buf += strlen(dummy_pfx);
+		}
 		copy_msg_bytes( &out_buf, in_buf, &idx, sbreak, in_cr, out_cr );
 
 		memcpy( out_buf, "X-TUID: ", 8 );
@@ -463,8 +511,25 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 			*out_buf++ = '\r';
 		*out_buf++ = '\n';
 		idx = ebreak;
+
+		if (break2 >= sbreak) {
+			copy_msg_bytes( &out_buf, in_buf, &idx, break2, in_cr, out_cr );
+			if (!add_subj) {
+				memcpy( out_buf, dummy_pfx, strlen(dummy_pfx) );
+				out_buf += strlen(dummy_pfx);
+			} else {
+				memcpy( out_buf, dummy_subj, strlen(dummy_subj) );
+				out_buf += strlen(dummy_subj);
+				if (app_cr)
+					*out_buf++ = '\r';
+				*out_buf++ = '\n';
+			}
+		}
 	}
 	copy_msg_bytes( &out_buf, in_buf, &idx, in_len, in_cr, out_cr );
+
+	if (vars->minimal)
+		memcpy( out_buf, dummy_msg_buf, dummy_msg_len );
 
 	free( in_buf );
 	return 1;
@@ -648,6 +713,33 @@ clean_strdup( const char *s )
 }
 
 
+static sync_rec_t *
+upgrade_srec( sync_vars_t *svars, sync_rec_t *srec )
+{
+	// Create an entry and append it to the current one.
+	sync_rec_t *nsrec = nfcalloc( sizeof(*nsrec) );
+	nsrec->next = srec->next;
+	srec->next = nsrec;
+	if (svars->srecadd == &srec->next)
+		svars->srecadd = &nsrec->next;
+	// Move the placeholder to the new entry.
+	int t = (srec->status & S_DUMMY(F)) ? F : N;
+	nsrec->uid[t] = srec->uid[t];
+	srec->uid[t] = 0;
+	if (srec->msg[t]) {  // NULL during journal replay; is assigned later.
+		nsrec->msg[t] = srec->msg[t];
+		nsrec->msg[t]->srec = nsrec;
+		srec->msg[t] = NULL;
+	}
+	// Mark the original entry for upgrade.
+	srec->status = (srec->status & ~(S_DUMMY(F)|S_DUMMY(N))) | S_PENDING;
+	srec->wstate |= W_UPGRADE;
+	// Mark the placeholder for nuking.
+	nsrec->wstate = W_PURGE;
+	nsrec->aflags[t] = F_DELETED;
+	return nsrec;
+}
+
 static int
 prepare_state( sync_vars_t *svars )
 {
@@ -741,7 +833,8 @@ save_state( sync_vars_t *svars )
 		if (srec->status & S_DEAD)
 			continue;
 		make_flags( srec->flags, fbuf );
-		Fprintf( svars->nfp, "%u %u %s%s\n", srec->uid[F], srec->uid[N],
+		Fprintf( svars->nfp, "%u %u %s%s%s\n", srec->uid[F], srec->uid[N],
+		         (srec->status & S_DUMMY(F)) ? "<" : (srec->status & S_DUMMY(N)) ? ">" : "",
 		         (srec->status & S_SKIPPED) ? "^" : (srec->status & S_EXPIRED) ? "~" : "", fbuf );
 	}
 
@@ -836,7 +929,14 @@ load_state( sync_vars_t *svars )
 			srec->uid[F] = t1;
 			srec->uid[N] = t2;
 			s = fbuf;
-			if (*s == '^') {
+			if (*s == '<') {
+				s++;
+				srec->status = S_DUMMY(F);
+			} else if (*s == '>') {
+				s++;
+				srec->status = S_DUMMY(N);
+			}
+			if (*s == '^') {  // Pre-1.4 legacy
 				s++;
 				srec->status = S_SKIPPED;
 			} else if (*s == '~' || *s == 'X' /* Pre-1.3 legacy */) {
@@ -850,8 +950,9 @@ load_state( sync_vars_t *svars )
 				srec->status = S_SKIPPED;
 			}
 			srec->flags = parse_flags( s );
-			debug( "  entry (%u,%u,%u,%s)\n", srec->uid[F], srec->uid[N], srec->flags,
-			       (srec->status & S_SKIPPED) ? "SKIP" : (srec->status & S_EXPIRED) ? "XPIRE" : "" );
+			debug( "  entry (%u,%u,%u,%s%s)\n", srec->uid[F], srec->uid[N], srec->flags,
+			       (srec->status & S_SKIPPED) ? "SKIP" : (srec->status & S_EXPIRED) ? "XPIRE" : "",
+			       (srec->status & S_DUMMY(F)) ? ",F-DUMMY" : (srec->status & S_DUMMY(N)) ? ",N-DUMMY" : "" );
 			*svars->srecadd = srec;
 			svars->srecadd = &srec->next;
 			svars->nsrecs++;
@@ -919,14 +1020,16 @@ load_state( sync_vars_t *svars )
 				}
 				buf[ll] = 0;
 				int tn;
-				uint t1, t2, t3;
+				uint t1, t2, t3, t4;
 				if ((c = buf[0]) == '#' ?
 				      (tn = 0, (sscanf( buf + 2, "%u %u %n", &t1, &t2, &tn ) < 2) || !tn || (ll - (uint)tn != TUIDL + 2)) :
 				      c == '!' ?
 				        (sscanf( buf + 2, "%u", &t1 ) != 1) :
-				        c == 'N' || c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '=' || c == '|' ?
+				        c == 'N' || c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '=' || c == '_' || c == '|' ?
 				          (sscanf( buf + 2, "%u %u", &t1, &t2 ) != 2) :
-				          (sscanf( buf + 2, "%u %u %u", &t1, &t2, &t3 ) != 3))
+				          c != '^' ?
+				            (sscanf( buf + 2, "%u %u %u", &t1, &t2, &t3 ) != 3) :
+				            (sscanf( buf + 2, "%u %u %u %u", &t1, &t2, &t3, &t4 ) != 4))
 				{
 					error( "Error: malformed journal entry at %s:%d\n", svars->jname, line );
 					goto jbail;
@@ -992,10 +1095,23 @@ load_state( sync_vars_t *svars )
 					case '*':
 						debug( "flags now %u\n", t3 );
 						srec->flags = (uchar)t3;
+						srec->aflags[F] = srec->aflags[N] = 0;
+						srec->wstate &= ~W_PURGE;
 						break;
 					case '~':
 						debug( "status now %#x\n", t3 );
 						srec->status = (uchar)t3;
+						break;
+					case '_':
+						debug( "has placeholder now\n" );
+						srec->status = S_PENDING;  // Pre-1.4 legacy only
+						srec->status |= !srec->uid[F] ? S_DUMMY(F) : S_DUMMY(N);
+						break;
+					case '^':
+						debug( "is being upgraded, flags %u, srec flags %u\n", t3, t4 );
+						srec->pflags = (uchar)t3;
+						srec->flags = (uchar)t4;
+						srec = upgrade_srec( svars, srec );
 						break;
 					default:
 						error( "Error: unrecognized journal entry at %s:%d\n", svars->jname, line );
@@ -1275,18 +1391,17 @@ box_opened2( sync_vars_t *svars, int t )
 		}
 		if (chan->ops[t] & (OP_NEW|OP_RENEW)) {
 			opts[t] |= OPEN_APPEND;
-			if (chan->ops[t] & OP_RENEW)
-				opts[1-t] |= OPEN_OLD;
-			if (chan->ops[t] & OP_NEW)
+			if (chan->ops[t] & OP_NEW) {
 				opts[1-t] |= OPEN_NEW;
-			if (chan->ops[t] & OP_EXPUNGE)  // Don't propagate doomed msgs
-				opts[1-t] |= OPEN_FLAGS;
-			if (chan->stores[t]->max_size != UINT_MAX) {
-				if (chan->ops[t] & OP_RENEW)
-					opts[1-t] |= OPEN_FLAGS|OPEN_OLD_SIZE;
-				if (chan->ops[t] & OP_NEW)
+				if (chan->stores[t]->max_size != UINT_MAX)
 					opts[1-t] |= OPEN_FLAGS|OPEN_NEW_SIZE;
 			}
+			if (chan->ops[t] & OP_RENEW) {
+				opts[t] |= OPEN_OLD|OPEN_FLAGS|OPEN_SETFLAGS;
+				opts[1-t] |= OPEN_OLD|OPEN_FLAGS;
+			}
+			if (chan->ops[t] & OP_EXPUNGE)  // Don't propagate doomed msgs
+				opts[1-t] |= OPEN_FLAGS;
 		}
 		if (chan->ops[t] & OP_EXPUNGE) {
 			opts[t] |= OPEN_EXPUNGE;
@@ -1311,6 +1426,15 @@ box_opened2( sync_vars_t *svars, int t )
 					opts[N] |= OPEN_NEW|OPEN_FIND, svars->state[N] |= ST_FIND_OLD;
 				else
 					warn( "Warning: sync record (%u,%u) has stray TUID. Ignoring.\n", srec->uid[F], srec->uid[N] );
+			}
+			if (srec->wstate & W_PURGE) {
+				t = srec->uid[F] ? F : N;
+				opts[t] |= OPEN_SETFLAGS;
+			}
+			if (srec->wstate & W_UPGRADE) {
+				t = !srec->uid[F] ? F : N;
+				opts[t] |= OPEN_APPEND;
+				opts[1-t] |= OPEN_OLD;
 			}
 		}
 	svars->opts[F] = svars->drv[F]->prepare_load_box( ctx[F], opts[F] );
@@ -1583,6 +1707,12 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 							debug( "  near side expiring\n" );
 							sflags &= ~F_DELETED;
 						}
+						if (srec->status & S_DUMMY(1-t)) {
+							// For placeholders, don't propagate:
+							// - Seen, because the real contents were obviously not seen yet
+							// - Flagged, because it's just a request to upgrade
+							sflags &= ~(F_SEEN|F_FLAGGED);
+						}
 						srec->aflags[t] = sflags & ~srec->flags;
 						srec->dflags[t] = ~sflags & srec->flags;
 						if ((DFlags & DEBUG_SYNC) && (srec->aflags[t] || srec->dflags[t])) {
@@ -1594,6 +1724,41 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 					}
 				}
 			}
+
+			sync_rec_t *nsrec = srec;
+			if (((srec->status & S_DUMMY(F)) && (svars->chan->ops[F] & OP_RENEW)) ||
+			     ((srec->status & S_DUMMY(N)) && (svars->chan->ops[N] & OP_RENEW))) {
+				// Flagging the message on either side causes an upgrade of the dummy.
+				// We ignore flag resets, because that corner case is not worth it.
+				ushort muflags = srec->msg[F] ? srec->msg[F]->flags : 0;
+				ushort suflags = srec->msg[N] ? srec->msg[N]->flags : 0;
+				if ((muflags | suflags) & F_FLAGGED) {
+					t = (srec->status & S_DUMMY(F)) ? F : N;
+					// We calculate the flags for the replicated message already now,
+					// because after an interruption the dummy may be already gone.
+					srec->pflags = ((srec->msg[t]->flags & ~(F_SEEN|F_FLAGGED)) | srec->aflags[t]) & ~srec->dflags[t];
+					// Consequently, the srec's flags are committed right away as well.
+					srec->flags = (srec->flags | srec->aflags[t]) & ~srec->dflags[t];
+					JLOG( "^ %u %u %u %u", (srec->uid[F], srec->uid[N], srec->pflags, srec->flags), "upgrading placeholder" );
+					nsrec = upgrade_srec( svars, srec );
+				}
+			}
+			// This is separated, because the upgrade can come from the journal.
+			if (srec->wstate & W_UPGRADE) {
+				t = !srec->uid[F] ? F : N;
+				tmsg = srec->msg[1-t];
+				if ((svars->chan->ops[t] & OP_EXPUNGE) && (srec->pflags & F_DELETED)) {
+					JLOG( "- %u %u", (srec->uid[F], srec->uid[N]), "killing upgrade - would be expunged anyway" );
+					tmsg->srec = NULL;
+					srec->status = S_DEAD;
+				} else {
+					// Pretend that the source message has the adjusted flags of the dummy.
+					tmsg->flags = srec->pflags;
+					tmsg->status = M_FLAGS;
+					any_new[t] = 1;
+				}
+			}
+			srec = nsrec;
 		}
 	}
 
@@ -1603,12 +1768,20 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			srec = tmsg->srec;
 			if (srec) {
 				if (srec->status & S_SKIPPED) {
-					// The message was skipped due to being too big.
+					// Pre-1.4 legacy only: The message was skipped due to being too big.
 					// We must have already seen the UID, but we might have been interrupted.
 					if (svars->maxuid[1-t] < tmsg->uid)
 						svars->maxuid[1-t] = tmsg->uid;
 					if (!(svars->chan->ops[t] & OP_RENEW))
 						continue;
+					srec->status = S_PENDING;
+					// The message size was not queried, so this won't be dummified below.
+					if (!(tmsg->flags & F_FLAGGED)) {
+						srec->status |= S_DUMMY(t);
+						JLOG( "_ %u %u", (srec->uid[F], srec->uid[N]), "placeholder only - was previously skipped" );
+					} else {
+						JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "was previously skipped" );
+					}
 				} else {
 					if (!(svars->chan->ops[t] & OP_NEW))
 						continue;
@@ -1623,8 +1796,8 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 					if (!(srec->status & S_PENDING))
 						continue;  // Nothing to do - the message is paired or expired
 					// Propagation was scheduled, but we got interrupted
+					debug( "unpropagated old message %u\n", tmsg->uid );
 				}
-				debug( "unpropagated old message %u\n", tmsg->uid );
 
 				if ((svars->chan->ops[t] & OP_EXPUNGE) && (tmsg->flags & F_DELETED)) {
 					JLOG( "- %u %u", (srec->uid[F], srec->uid[N]), "killing - would be expunged anyway" );
@@ -1660,20 +1833,12 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				tmsg->srec = srec;
 				JLOG( "+ %u %u", (srec->uid[F], srec->uid[N]), "fresh" );
 			}
-			if ((tmsg->flags & F_FLAGGED) || tmsg->size <= svars->chan->stores[t]->max_size) {
-				if (srec->status != S_PENDING) {
-					srec->status = S_PENDING;
-					JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "was too big" );
-				}
-				any_new[t] = 1;
-			} else {
-				if (srec->status == S_SKIPPED) {
-					debug( "-> still too big\n" );
-				} else {
-					srec->status = S_SKIPPED;
-					JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "skipping - too big" );
-				}
+			if (!(tmsg->flags & F_FLAGGED) && tmsg->size > svars->chan->stores[t]->max_size &&
+			    !(srec->wstate & W_UPGRADE) && !(srec->status & (S_DUMMY(F)|S_DUMMY(N)))) {
+				srec->status |= S_DUMMY(t);
+				JLOG( "_ %u %u", (srec->uid[F], srec->uid[N]), "placeholder only - too big" );
 			}
+			any_new[t] = 1;
 		}
 	}
 
@@ -1790,14 +1955,22 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 
 	debug( "synchronizing flags\n" );
 	for (srec = svars->srecs; srec; srec = srec->next) {
-		if ((srec->status & S_DEAD) || !srec->uid[F] || !srec->uid[N])
+		if (srec->status & S_DEAD)
 			continue;
 		for (t = 0; t < 2; t++) {
+			if (!srec->uid[t])
+				continue;
 			aflags = srec->aflags[t];
 			dflags = srec->dflags[t];
-			if (srec->wstate & W_DELETE) {
+			if (srec->wstate & (W_DELETE|W_PURGE)) {
 				if (!aflags) {
-					/* This deletion propagation goes the other way round. */
+					// This deletion propagation goes the other way round, or
+					// this deletion of a dummy happens on the other side.
+					continue;
+				}
+				if (!srec->msg[t] && (svars->opts[t] & OPEN_OLD)) {
+					// The message disappeared. This can happen, because the wstate may
+					// come from the journal, and things could have happened meanwhile.
 					continue;
 				}
 			} else {
@@ -1874,7 +2047,7 @@ msg_copied( int sts, uint uid, copy_vars_t *vars )
 	sync_rec_t *srec = vars->srec;
 	switch (sts) {
 	case SYNC_OK:
-		if (vars->msg->flags != srec->flags) {
+		if (!(srec->wstate & W_UPGRADE) && vars->msg->flags != srec->flags) {
 			srec->flags = vars->msg->flags;
 			JLOG( "* %u %u %u", (srec->uid[F], srec->uid[N], srec->flags), "%sed with flags", str_hl[t] );
 		}
@@ -1937,6 +2110,7 @@ msgs_copied( sync_vars_t *svars, int t )
 				cv->aux = AUX;
 				cv->srec = srec;
 				cv->msg = tmsg;
+				cv->minimal = (srec->status & S_DUMMY(t));
 				copy_msg( cv );
 				svars->state[t] &= ~ST_SENDING_NEW;
 				if (check_cancel( svars ))
@@ -2085,6 +2259,7 @@ msgs_flags_set( sync_vars_t *svars, int t )
 							cv->aux = INV_AUX;
 							cv->srec = NULL;
 							cv->msg = tmsg;
+							cv->minimal = 0;
 							copy_msg( cv );
 							if (check_cancel( svars ))
 								goto out;

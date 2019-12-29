@@ -161,29 +161,75 @@ my @x10 = (
     ],
 );
 
-my @O11 = ("MaxSize 1k\n", "MaxSize 1k\n", "");
+my @O11 = ("MaxSize 1k\n", "MaxSize 1k\n", "Expunge Near");
 #show("10", "11", "11");
 my @X11 = (
- [ 2,
-   A, 1, "", B, 2, "*" ],
- [ 2,
-   C, 1, "*", A, 2, "" ],
- [ 2, 0, 2,
-   0, 1, "^", 1, 2, "", 2, 0, "^" ],
+ [ 3,
+   A, 1, "", B, 2, "*", C, 3, "?" ],
+ [ 3,
+   C, 1, "*", A, 2, "", B, 3, "?" ],
+ [ 3, 0, 3,
+   3, 1, "<", 1, 2, "", 2, 3, ">" ],
 );
 test("max size", \@x10, \@X11, @O11);
 
-my @O22 = ("", "MaxSize 1k\n", "");
-#show("11", "22", "22");
-my @X22 = (
+my @x22 = (
  [ 3,
-   A, 1, "", B, 2, "*", C, 3, "*" ],
- [ 2,
-   C, 1, "*", A, 2, "" ],
- [ 3, 0, 2,
-   3, 1, "", 1, 2, "", 2, 0, "^" ],
+   A, 1, "", B, 2, "*", C, 3, "?" ],
+ [ 3,
+   C, 1, "F*", A, 2, "", B, 3, "F?" ],
+ [ 3, 0, 3,
+   3, 1, "<", 1, 2, "", 2, 3, ">" ],
 );
-test("near side max size", \@X11, \@X22, @O22);
+
+#show("22", "22", "11");
+my @X22 = (
+ [ 4,
+   A, 1, "", B, 2, "*", C, 3, "T?", C, 4, "F*" ],
+ [ 4,
+   C, 1, "F*", A, 2, "", B, 4, "*" ],
+ [ 4, 0, 4,
+   4, 1, "F", 3, 0, "T", 1, 2, "", 2, 4, "" ],
+);
+test("max size + flagging", \@x22, \@X22, @O11);
+
+my @x23 = (
+ [ 2,
+   A, 1, "", B, 2, "F*" ],
+ [ 1,
+   C, 1, "F*" ],
+ [ 0, 0, 0,
+    ],
+);
+
+my @X23 = (
+ [ 3,
+   A, 1, "", B, 2, "F*", C, 3, "F*" ],
+ [ 3,
+   C, 1, "F*", A, 2, "", B, 3, "F*" ],
+ [ 3, 0, 3,
+   3, 1, "F", 1, 2, "", 2, 3, "F" ]
+);
+test("max size + initial flagging", \@x23, \@X23, @O11);
+
+my @x24 = (
+ [ 3,
+   A, 1, "", B, 2, "*", C, 3, "F*" ],
+ [ 1,
+   A, 1, "" ],
+ [ 3, 0, 1,
+   1, 1, "", 2, 0, "^", 3, 0, "^" ],
+);
+
+my @X24 = (
+ [ 3,
+   A, 1, "", B, 2, "*", C, 3, "F*" ],
+ [ 3,
+   A, 1, "", B, 2, "?", C, 3, "F*" ],
+ [ 3, 0, 3,
+   1, 1, "", 2, 2, ">", 3, 3, "F" ],
+);
+test("max size (pre-1.4 legacy)", \@x24, \@X24, @O11);
 
 # expiration tests
 
@@ -329,7 +375,7 @@ sub readbox($)
 	for my $d ("cur", "new") {
 		opendir(DIR, $bn."/".$d) or next;
 		for my $f (grep(!/^\.\.?$/, readdir(DIR))) {
-			my ($uid, $flg, $num);
+			my ($uid, $flg, $ph, $num);
 			if ($f =~ /^\d+\.\d+_\d+\.[-[:alnum:]]+,U=(\d+):2,(.*)$/) {
 				($uid, $flg) = ($1, $2);
 			} else {
@@ -339,7 +385,7 @@ sub readbox($)
 			open(FILE, "<", $bn."/".$d."/".$f) or die "Cannot read message '$f' in '$bn'.\n";
 			my $sz = 0;
 			while (<FILE>) {
-				/^Subject: (\d+)$/ && ($num = $1);
+				/^Subject: (\[placeholder\] )?(\d+)$/ && ($ph = defined($1), $num = $2);
 				$sz += length($_);
 			}
 			close FILE;
@@ -347,7 +393,7 @@ sub readbox($)
 				print STDERR "message '$f' in '$bn' has no identifier.\n";
 				exit 1;
 			}
-			@{ $ms{$uid} } = ($num, $flg.($sz>1000?"*":""));
+			@{ $ms{$uid} } = ($num, $flg.($sz>1000?"*":"").($ph?"?":""));
 		}
 	}
 	return ($mu, %ms);
@@ -455,9 +501,10 @@ sub mkbox($$@)
 	while (@ms) {
 		my ($num, $uid, $flg) = (shift @ms, shift @ms, shift @ms);
 		my $big = $flg =~ s/\*//;
+		my $ph = $flg =~ s/\?//;
 		open(FILE, ">", $bn."/".($flg =~ /S/ ? "cur" : "new")."/0.1_".$num.".local,U=".$uid.":2,".$flg) or
 			die "Cannot create message ".mn($num)." in mailbox $bn.\n";
-		print FILE "From: foo\nTo: bar\nDate: Thu, 1 Jan 1970 00:00:00 +0000\nSubject: $num\n\n".(("A"x50)."\n")x($big*30);
+		print FILE "From: foo\nTo: bar\nDate: Thu, 1 Jan 1970 00:00:00 +0000\nSubject: ".($ph?"[placeholder] ":"").$num."\n\n".(("A"x50)."\n")x($big*30);
 		close FILE;
 	}
 }

@@ -163,8 +163,16 @@ directory.
 .
 .TP
 \fBMaxSize\fR \fIsize\fR[\fBk\fR|\fBm\fR][\fBb\fR]
-Messages larger than that will not be propagated into this Store.
-This is useful for weeding out messages with large attachments.
+Messages larger than \fIsize\fR will have only a small placeholder message
+propagated into this Store. To propagate the full message, it must be
+flagged in either Store; that can be done retroactively, in which case
+the \fBReNew\fR operation needs to be executed instead of \fBNew\fR.
+This is useful for avoiding downloading messages with large attachments
+unless they are actually needed.
+Caveat: Setting a size limit on a Store you never read directly (which is
+typically the case for servers) is not recommended, as you may never
+notice that affected messages were not propagated to it.
+.br
 \fBK\fR and \fBM\fR can be appended to the size to specify KiBytes resp.
 MeBytes instead of bytes. \fBB\fR is accepted but superfluous.
 If \fIsize\fR is 0, the maximum message size is \fBunlimited\fR.
@@ -574,9 +582,8 @@ Select the synchronization operation(s) to perform:
 .br
 \fBNew\fR - propagate newly appeared messages.
 .br
-\fBReNew\fR - previously refused messages are re-evaluated for propagation.
-Useful after flagging affected messages in the source Store or enlarging
-MaxSize in the destination Store.
+\fBReNew\fR - upgrade placeholders to full messages. Useful only with
+a configured \fBMaxSize\fR.
 .br
 \fBDelete\fR - propagate message deletions. This applies only to messages that
 are actually gone, i.e., were expunged. The affected messages in the remote

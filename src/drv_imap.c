@@ -1098,7 +1098,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 				error( "IMAP error: unable to parse RFC822.SIZE\n" );
 				goto ffail;
 			}
-		} else if (!strcmp( "BODY[]", name )) {
+		} else if (!strcmp( "BODY[]", name ) || !strcmp( "BODY[HEADER]", name )) {
 			if (!is_atom( tmp )) {
 				error( "IMAP error: unable to parse BODY[]\n" );
 				goto ffail;
@@ -2714,9 +2714,8 @@ imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint finduid, uint pairu
 			ranges[0].last = maxuid;
 			ranges[0].flags = 0;
 			uint nranges = 1;
-			if (ctx->opts & (OPEN_OLD_SIZE | OPEN_NEW_SIZE))
-				imap_set_range( ranges, &nranges, shifted_bit( ctx->opts, OPEN_OLD_SIZE, WantSize),
-				                                  shifted_bit( ctx->opts, OPEN_NEW_SIZE, WantSize), newuid );
+			if (ctx->opts & OPEN_NEW_SIZE)
+				imap_set_range( ranges, &nranges, 0, WantSize, newuid );
 			if (ctx->opts & OPEN_FIND)
 				imap_set_range( ranges, &nranges, 0, WantTuids, finduid - 1 );
 			if (ctx->opts & OPEN_OLD_IDS)
@@ -2811,7 +2810,7 @@ imap_submit_load_p3( imap_store_t *ctx, imap_load_box_state_t *sts )
 static void imap_fetch_msg_p2( imap_store_t *, imap_cmd_t *, int );
 
 static void
-imap_fetch_msg( store_t *ctx, message_t *msg, msg_data_t *data,
+imap_fetch_msg( store_t *ctx, message_t *msg, msg_data_t *data, int minimal,
                 void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_cmd_fetch_msg_t *cmd;
@@ -2821,9 +2820,10 @@ imap_fetch_msg( store_t *ctx, message_t *msg, msg_data_t *data,
 	cmd->msg_data = data;
 	data->data = NULL;
 	imap_exec( (imap_store_t *)ctx, &cmd->gen.gen, imap_fetch_msg_p2,
-	           "UID FETCH %u (%s%sBODY.PEEK[])", msg->uid,
+	           "UID FETCH %u (%s%sBODY.PEEK[%s])", msg->uid,
 	           !(msg->status & M_FLAGS) ? "FLAGS " : "",
-	           (data->date== -1) ? "INTERNALDATE " : "" );
+	           (data->date== -1) ? "INTERNALDATE " : "",
+	           minimal ? "HEADER" : "" );
 }
 
 static void

@@ -80,7 +80,6 @@ typedef struct message {
 #define OPEN_OLD        (1<<0)  // Paired messages *in* this store.
 #define OPEN_NEW        (1<<1)  // Messages (possibly) not yet propagated *from* this store.
 #define OPEN_FLAGS      (1<<2)  // Note that fetch_msg() gets the flags regardless.
-#define OPEN_OLD_SIZE   (1<<3)
 #define OPEN_NEW_SIZE   (1<<4)
 #define OPEN_EXPUNGE    (1<<5)
 #define OPEN_SETFLAGS   (1<<6)
@@ -217,8 +216,10 @@ struct driver {
 	void (*load_box)( store_t *ctx, uint minuid, uint maxuid, uint finduid, uint pairuid, uint newuid, uint_array_t excs,
 	                  void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux );
 
-	/* Fetch the contents and flags of the given message from the current mailbox. */
-	void (*fetch_msg)( store_t *ctx, message_t *msg, msg_data_t *data,
+	/* Fetch the contents and flags of the given message from the current mailbox.
+	 * If minimal is non-zero, fetch only a placeholder for the requested message -
+	 * ideally, this is precisely the header, but it may be more. */
+	void (*fetch_msg)( store_t *ctx, message_t *msg, msg_data_t *data, int minimal,
 	                   void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Store the given message to either the current mailbox or the trash folder.
