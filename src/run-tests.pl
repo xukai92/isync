@@ -730,7 +730,7 @@ sub test($$$@)
 				print "Expected result:\n";
 				printchan($tx);
 				print "Actual result:\n";
-				showchan("slave/.mbsyncstate");
+				showchan("slave/.mbsyncstate.new");
 			}
 			print "Debug output:\n";
 			print @nret;
