@@ -262,7 +262,6 @@ match_tuids( sync_vars_t *svars, int t, message_t *msgs )
 			}
 			debug( "  -> TUID lost\n" );
 			jFprintf( svars, "& %u %u\n", srec->uid[M], srec->uid[S] );
-			srec->flags = 0;
 			// Note: status remains S_PENDING.
 			srec->tuid[0] = 0;
 			num_lost++;
@@ -942,7 +941,6 @@ load_state( sync_vars_t *svars )
 						break;
 					case '&':
 						debug( "TUID %." stringify(TUIDL) "s lost\n", srec->tuid );
-						srec->flags = 0;
 						srec->tuid[0] = 0;
 						break;
 					case '<':
@@ -1623,11 +1621,6 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 						debug( "  -> pair(%u,%u) created\n", srec->uid[M], srec->uid[S] );
 					}
 					if ((tmsg->flags & F_FLAGGED) || tmsg->size <= svars->chan->stores[t]->max_size) {
-						if (tmsg->flags != srec->flags) {
-							srec->flags = tmsg->flags;
-							jFprintf( svars, "* %u %u %u\n", srec->uid[M], srec->uid[S], srec->flags );
-							debug( "  -> updated flags to %u\n", tmsg->flags );
-						}
 						if (srec->status != S_PENDING) {
 							debug( "  -> not too big any more\n" );
 							srec->status = S_PENDING;
@@ -1845,6 +1838,11 @@ msg_copied( int sts, uint uid, copy_vars_t *vars )
 	sync_rec_t *srec = vars->srec;
 	switch (sts) {
 	case SYNC_OK:
+		if (vars->msg->flags != srec->flags) {
+			srec->flags = vars->msg->flags;
+			debug( "  -> updated flags to %u\n", srec->flags );
+			jFprintf( svars, "* %u %u %u\n", srec->uid[M], srec->uid[S], srec->flags );
+		}
 		if (!uid) {  // Stored to a non-UIDPLUS mailbox
 			svars->state[t] |= ST_FIND_NEW;
 		} else {
