@@ -245,6 +245,22 @@ jFprintf( sync_vars_t *svars, const char *msg, ... )
 #define JLOG(...) JLOG_SEL(__VA_ARGS__, JLOG4, JLOG3, NO_JLOG2, NO_JLOG1)(__VA_ARGS__)
 
 static void
+assign_uid( sync_vars_t *svars, sync_rec_t *srec, int t, uint uid )
+{
+	srec->uid[t] = uid;
+	if (uid == svars->maxuid[t] + 1)
+		svars->maxuid[t] = uid;
+	srec->status &= ~S_PENDING;
+	srec->tuid[0] = 0;
+}
+
+#define ASSIGN_UID(srec, t, nuid, ...) \
+	do { \
+		JLOG( "%c %u %u %u", ("<>"[t], srec->uid[F], srec->uid[N], nuid), __VA_ARGS__ ); \
+		assign_uid( svars, srec, t, nuid ); \
+	} while (0)
+
+static void
 match_tuids( sync_vars_t *svars, int t, message_t *msgs )
 {
 	sync_rec_t *srec;
@@ -279,15 +295,10 @@ match_tuids( sync_vars_t *svars, int t, message_t *msgs )
 			num_lost++;
 			continue;
 		  mfound:
-			JLOG( "%c %u %u %u", ("<>"[t], srec->uid[F], srec->uid[N], tmsg->uid), "TUID matched %s", diag );
 			tmsg->srec = srec;
 			srec->msg[t] = tmsg;
 			ntmsg = tmsg->next;
-			srec->uid[t] = tmsg->uid;
-			if (tmsg->uid == svars->maxuid[t] + 1)
-				svars->maxuid[t] = tmsg->uid;
-			srec->status = 0;
-			srec->tuid[0] = 0;
+			ASSIGN_UID( srec, t, tmsg->uid, "TUID matched %s", diag );
 		}
 	}
 	if (num_lost)
@@ -944,19 +955,11 @@ load_state( sync_vars_t *svars )
 						break;
 					case '<':
 						debug( "far side now %u\n", t3 );
-						srec->uid[F] = t3;
-						if (t3 == svars->maxuid[F] + 1)
-							svars->maxuid[F] = t3;
-						srec->status &= ~S_PENDING;
-						srec->tuid[0] = 0;
+						assign_uid( svars, srec, F, t3 );
 						break;
 					case '>':
 						debug( "near side now %u\n", t3 );
-						srec->uid[N] = t3;
-						if (t3 == svars->maxuid[N] + 1)
-							svars->maxuid[N] = t3;
-						srec->status &= ~S_PENDING;
-						srec->tuid[0] = 0;
+						assign_uid( svars, srec, N, t3 );
 						break;
 					case '*':
 						debug( "flags now %u\n", t3 );
@@ -1851,12 +1854,7 @@ msg_copied( int sts, uint uid, copy_vars_t *vars )
 		if (!uid) {  // Stored to a non-UIDPLUS mailbox
 			svars->state[t] |= ST_FIND_NEW;
 		} else {
-			JLOG( "%c %u %u %u", ("<>"[t], srec->uid[F], srec->uid[N], uid), "%sed message", str_hl[t] );
-			vars->srec->uid[t] = uid;
-			if (uid == svars->maxuid[t] + 1)
-				svars->maxuid[t] = uid;
-			vars->srec->status &= ~S_PENDING;
-			vars->srec->tuid[0] = 0;
+			ASSIGN_UID( srec, t, uid, "%sed message", str_hl[t] );
 		}
 		break;
 	case SYNC_NOGOOD:
