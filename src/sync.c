@@ -1840,22 +1840,23 @@ static void
 msg_copied( int sts, uint uid, copy_vars_t *vars )
 {
 	SVARS_CHECK_CANCEL_RET;
+	sync_rec_t *srec = vars->srec;
 	switch (sts) {
 	case SYNC_OK:
 		if (!uid) {  // Stored to a non-UIDPLUS mailbox
 			svars->state[t] |= ST_FIND_NEW;
 		} else {
 			debug( "  -> new UID %u on %s\n", uid, str_ms[t] );
-			jFprintf( svars, "%c %u %u %u\n", "<>"[t], vars->srec->uid[M], vars->srec->uid[S], uid );
+			jFprintf( svars, "%c %u %u %u\n", "<>"[t], srec->uid[M], srec->uid[S], uid );
 			vars->srec->uid[t] = uid;
 			vars->srec->status &= ~S_PENDING;
 			vars->srec->tuid[0] = 0;
 		}
 		break;
 	case SYNC_NOGOOD:
-		debug( "  -> killing (%u,%u)\n", vars->srec->uid[M], vars->srec->uid[S] );
-		vars->srec->status = S_DEAD;
-		jFprintf( svars, "- %u %u\n", vars->srec->uid[M], vars->srec->uid[S] );
+		debug( "  -> killing (%u,%u)\n", srec->uid[M], srec->uid[S] );
+		srec->status = S_DEAD;
+		jFprintf( svars, "- %u %u\n", srec->uid[M], srec->uid[S] );
 		break;
 	default:
 		cancel_sync( svars );
@@ -1965,13 +1966,14 @@ static void
 flags_set( int sts, void *aux )
 {
 	SVARS_CHECK_RET_VARS(flag_vars_t);
+	sync_rec_t *srec = vars->srec;
 	switch (sts) {
 	case DRV_OK:
 		if (vars->aflags & F_DELETED)
-			vars->srec->wstate |= W_DEL(t);
+			srec->wstate |= W_DEL(t);
 		else if (vars->dflags & F_DELETED)
-			vars->srec->wstate &= ~W_DEL(t);
-		flags_set_p2( svars, vars->srec, t );
+			srec->wstate &= ~W_DEL(t);
+		flags_set_p2( svars, srec, t );
 		break;
 	}
 	free( vars );
