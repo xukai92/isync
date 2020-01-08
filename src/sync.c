@@ -170,6 +170,7 @@ typedef struct {
 	uint newuidval[2];  // UID validity obtained from driver
 	uint newuid[2];     // TUID lookup makes sense only for UIDs >= this
 	uint mmaxxuid;      // highest expired UID on master
+	uchar good_flags[2], bad_flags[2];
 } sync_vars_t;
 
 static void sync_ref( sync_vars_t *svars ) { ++svars->ref_count; }
@@ -279,6 +280,24 @@ match_tuids( sync_vars_t *svars, int t, message_t *msgs )
 	}
 	if (num_lost)
 		warn( "Warning: lost track of %d %sed message(s)\n", num_lost, str_hl[t] );
+}
+
+
+static uchar
+sanitize_flags( uchar tflags, sync_vars_t *svars, int t )
+{
+	if (!(DFlags & QUIET)) {
+		// We complain only once per flag per store - even though _theoretically_
+		// each mailbox can support different flags according to the IMAP spec.
+		uchar bflags = tflags & ~(svars->good_flags[t] | svars->bad_flags[t]);
+		if (bflags) {
+			char bfbuf[16];
+			make_flags( bflags, bfbuf );
+			notice( "Notice: %s does not support flag(s) '%s'; not propagating.\n", str_ms[t], bfbuf );
+			svars->bad_flags[t] |= bflags;
+		}
+	}
+	return tflags & svars->good_flags[t];
 }
 
 
@@ -421,7 +440,7 @@ msg_fetched( int sts, void *aux )
 			return;
 		}
 
-		vars->msg->flags = vars->data.flags;
+		vars->msg->flags = vars->data.flags = sanitize_flags( vars->data.flags, svars, t );
 
 		scr = (svars->drv[1-t]->get_caps( svars->ctx[1-t] ) / DRV_CRLF) & 1;
 		tcr = (svars->drv[t]->get_caps( svars->ctx[t] ) / DRV_CRLF) & 1;
@@ -1490,6 +1509,8 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	}
 
 	info( "Synchronizing...\n" );
+	for (t = 0; t < 2; t++)
+		svars->good_flags[t] = (uchar)svars->drv[t]->get_supported_flags( svars->ctx[t] );
 
 	debug( "synchronizing old entries\n" );
 	for (srec = svars->srecs; srec; srec = srec->next) {
@@ -1550,7 +1571,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				} else {
 					// We have a source. The target may be in an unknown state.
 					if (svars->chan->ops[t] & OP_FLAGS) {
-						sflags = srec->msg[1-t]->flags;
+						sflags = sanitize_flags( srec->msg[1-t]->flags, svars, t );
 						if ((t == M) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
 							/* Don't propagate deletion resulting from expiration. */
 							debug( "  slave expiring\n" );

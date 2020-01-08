@@ -1325,6 +1325,12 @@ maildir_get_uidnext( store_t *gctx ATTR_UNUSED )
 	return 0;
 }
 
+static xint
+maildir_get_supported_flags( store_t *gctx ATTR_UNUSED )
+{
+	return 255;
+}
+
 static void
 maildir_create_box( store_t *gctx,
                     void (*cb)( int sts, void *aux ), void *aux )
@@ -1934,6 +1940,7 @@ struct driver maildir_driver = {
 	maildir_create_box,
 	maildir_open_box,
 	maildir_get_uidnext,
+	maildir_get_supported_flags,
 	maildir_confirm_box_empty,
 	maildir_delete_box,
 	maildir_finish_delete_box,

@@ -105,6 +105,7 @@ struct imap_store {
 	/* trash folder's existence is not confirmed yet */
 	enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
 	uint got_namespace:1;
+	uint has_forwarded:1;
 	char delimiter[2]; /* hierarchy delimiter */
 	list_t *ns_personal, *ns_other, *ns_shared; /* NAMESPACE info */
 	string_list_t *boxes; // _list results
@@ -1199,6 +1200,27 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 			error( "IMAP error: malformed APPENDUID status\n" );
 			return RESP_CANCEL;
 		}
+	} else if (!strcmp( "PERMANENTFLAGS", arg )) {
+		parse_list_init( &ctx->parse_list_sts );
+		if (parse_imap_list( NULL, &s, &ctx->parse_list_sts ) != LIST_OK) {
+			error( "IMAP error: malformed PERMANENTFLAGS status\n" );
+			return RESP_CANCEL;
+		}
+		int ret = RESP_OK;
+		for (list_t *tmp = ctx->parse_list_sts.head->child; tmp; tmp = tmp->next) {
+			if (!is_atom( tmp )) {
+				error( "IMAP error: malformed PERMANENTFLAGS status item\n" );
+				ret = RESP_CANCEL;
+				break;
+			}
+			if (!strcmp( tmp->val, "\\*" ) || !strcmp( tmp->val, "$Forwarded" )) {
+				ctx->has_forwarded = 1;
+				break;
+			}
+		}
+		free_list( ctx->parse_list_sts.head );
+		ctx->parse_list_sts.head = NULL;
+		return ret;
 	}
 	return RESP_OK;
 }
@@ -2432,6 +2454,14 @@ imap_get_uidnext( store_t *gctx )
 	return ctx->uidnext;
 }
 
+static xint
+imap_get_supported_flags( store_t *gctx )
+{
+	imap_store_t *ctx = (imap_store_t *)gctx;
+
+	return ctx->has_forwarded ? 255 : (255 & ~F_FORWARDED);
+}
+
 /******************* imap_create_box *******************/
 
 static void
@@ -3433,6 +3463,7 @@ struct driver imap_driver = {
 	imap_create_box,
 	imap_open_box,
 	imap_get_uidnext,
+	imap_get_supported_flags,
 	imap_confirm_box_empty,
 	imap_delete_box,
 	imap_finish_delete_box,

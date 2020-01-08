@@ -181,6 +181,9 @@ struct driver {
 	/* Return the minimal UID the next stored message will have. */
 	int (*get_uidnext)( store_t *ctx );
 
+	/* Return the flags that can be stored in the selected mailbox. */
+	xint (*get_supported_flags)( store_t *ctx );
+
 	/* Confirm that the open mailbox is empty. */
 	int (*confirm_box_empty)( store_t *ctx );
 
