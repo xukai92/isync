@@ -47,7 +47,10 @@ LOG_PL = \
         print $$log."\n"; \
     }
 
-$(srcdir)/ChangeLog: log
+$(srcdir)/.git/index:
+$(srcdir)/ChangeLog: $(srcdir)/.git/index
+	$(MAKE) log
+
 log:
 	@test -z "$(srcdir)" || cd $(srcdir) && \
 	 ( ! test -d .git || \
