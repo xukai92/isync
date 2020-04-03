@@ -344,7 +344,7 @@ sub readbox($)
 				print STDERR "message '$f' in '$bn' has no identifier.\n";
 				exit 1;
 			}
-			@{ $ms{$num} } = ($uid, $flg.($sz>1000?"*":""));
+			@{ $ms{$uid} } = ($num, $flg.($sz>1000?"*":""));
 		}
 	}
 	return ($mu, %ms);
@@ -360,8 +360,8 @@ sub showbox($)
 
 	my ($mu, %ms) = readbox($bn);
 	my @MS = ($mu);
-	for my $num (sort { $a <=> $b } keys %ms) {
-		push @MS, $num, $ms{$num}[0], $ms{$num}[1];
+	for my $uid (sort { $ms{$a}[0] <=> $ms{$b}[0] } keys %ms) {
+		push @MS, $ms{$uid}[0], $uid, $ms{$uid}[1];
 	}
 	printbox($bn, @MS);
 }
@@ -487,19 +487,19 @@ sub ckbox($$@)
 	}
 	while (@MS) {
 		my ($num, $uid, $flg) = (shift @MS, shift @MS, shift @MS);
-		if (!defined $ms{$num}) {
-			print STDERR "No message $bn:$num.\n";
+		my $m = delete $ms{$uid};
+		if (!defined $m) {
+			print STDERR "No message $bn:$uid.\n";
 			return 1;
 		}
-		if ($ms{$num}[0] ne $uid) {
-			print STDERR "UID mismatch for $bn:$num.\n";
+		if ($$m[0] ne $num) {
+			print STDERR "Subject mismatch for $bn:$uid.\n";
 			return 1;
 		}
-		if ($ms{$num}[1] ne $flg) {
-			print STDERR "Flag mismatch for $bn:$num.\n";
+		if ($$m[1] ne $flg) {
+			print STDERR "Flag mismatch for $bn:$uid.\n";
 			return 1;
 		}
-		delete $ms{$num};
 	}
 	if (%ms) {
 		print STDERR "Excess messages in '$bn': ".join(", ", sort({$a <=> $b } keys(%ms))).".\n";
