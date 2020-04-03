@@ -329,8 +329,6 @@ sub readbox($)
 			my ($uid, $flg, $num);
 			if ($f =~ /^\d+\.\d+_\d+\.[-[:alnum:]]+,U=(\d+):2,(.*)$/) {
 				($uid, $flg) = ($1, $2);
-			} elsif ($f =~ /^\d+\.\d+_(\d+)\.[-[:alnum:]]+:2,(.*)$/) {
-				($uid, $flg) = (0, $2);
 			} else {
 				print STDERR "unrecognided file name '$f' in '$bn'.\n";
 				exit 1;
@@ -453,13 +451,8 @@ sub mkbox($$@)
 	close FILE;
 	while (@ms) {
 		my ($num, $uid, $flg) = (shift @ms, shift @ms, shift @ms);
-		if ($uid) {
-			$uid = ",U=".$uid;
-		} else {
-			$uid = "";
-		}
 		my $big = $flg =~ s/\*//;
-		open(FILE, ">", $bn."/".($flg =~ /S/ ? "cur" : "new")."/0.1_".$num.".local".$uid.":2,".$flg) or
+		open(FILE, ">", $bn."/".($flg =~ /S/ ? "cur" : "new")."/0.1_".$num.".local,U=".$uid.":2,".$flg) or
 			die "Cannot create message $num in mailbox $bn.\n";
 		print FILE "From: foo\nTo: bar\nDate: Thu, 1 Jan 1970 00:00:00 +0000\nSubject: $num\n\n".(("A"x50)."\n")x($big*30);
 		close FILE;
