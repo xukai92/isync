@@ -1716,7 +1716,7 @@ maildir_set_msg_flags( store_t *gctx, message_t *gmsg, uint uid ATTR_UNUSED, int
 			}
 			tl = ol + 3 + fl;
 		} else {
-			tl = ol + maildir_make_flags( conf->info_delimiter, msg->gen.flags, nbuf + bl + ol );
+			tl = ol + maildir_make_flags( conf->info_delimiter, (uchar)add, nbuf + bl + ol );
 		}
 		if (!rename( buf, nbuf ))
 			break;
