@@ -703,7 +703,7 @@ save_state( sync_vars_t *svars )
 			continue;
 		make_flags( srec->flags, fbuf );
 		Fprintf( svars->nfp, "%u %u %s%s\n", srec->uid[M], srec->uid[S],
-		         (srec->status & S_SKIPPED) ? "^" : (srec->status & S_PENDING) ? "!" : (srec->status & S_EXPIRED) ? "~" : "", fbuf );
+		         (srec->status & S_SKIPPED) ? "^" : (srec->status & S_EXPIRED) ? "~" : "", fbuf );
 	}
 
 	Fclose( svars->nfp, 1 );
@@ -799,28 +799,19 @@ load_state( sync_vars_t *svars )
 			if (*s == '^') {
 				s++;
 				srec->status = S_SKIPPED;
-			} else if (*s == '!') {
-				s++;
-				srec->status = S_PENDING;
 			} else if (*s == '~' || *s == 'X' /* Pre-1.3 legacy */) {
 				s++;
 				srec->status = S_EXPIRE | S_EXPIRED;
 			} else if (srec->uid[M] == (uint)-1) {  // Pre-1.3 legacy
 				srec->uid[M] = 0;
 				srec->status = S_SKIPPED;
-			} else if (srec->uid[M] == (uint)-2) {
-				srec->uid[M] = 0;
-				srec->status = S_PENDING;
 			} else if (srec->uid[S] == (uint)-1) {
 				srec->uid[S] = 0;
 				srec->status = S_SKIPPED;
-			} else if (srec->uid[S] == (uint)-2) {
-				srec->uid[S] = 0;
-				srec->status = S_PENDING;
 			}
 			srec->flags = parse_flags( s );
 			debug( "  entry (%u,%u,%u,%s)\n", srec->uid[M], srec->uid[S], srec->flags,
-			       (srec->status & S_SKIPPED) ? "SKIP" : (srec->status & S_PENDING) ? "FAIL" : (srec->status & S_EXPIRED) ? "XPIRE" : "" );
+			       (srec->status & S_SKIPPED) ? "SKIP" : (srec->status & S_EXPIRED) ? "XPIRE" : "" );
 			*svars->srecadd = srec;
 			svars->srecadd = &srec->next;
 			svars->nsrecs++;
