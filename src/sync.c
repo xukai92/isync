@@ -1310,14 +1310,16 @@ box_opened2( sync_vars_t *svars, int t )
 			for (srec = svars->srecs; srec; srec = srec->next) {
 				if (srec->status & S_DEAD)
 					continue;
-				if (!srec->uid[M])  // No message; other state is irrelevant
-					continue;
-				if (minwuid > srec->uid[M] && (!(svars->opts[M] & OPEN_NEW) || svars->maxuid[M] >= srec->uid[M])) {
-					if (!srec->uid[S] && !(srec->status & S_PENDING))  // Only actually paired up messages matter
-						continue;
-					/* The pair is alive, but outside the bulk range. */
-					*uint_array_append( &mexcs ) = srec->uid[M];
-				}
+				if (!srec->uid[M])
+					continue;  // No message; other state is irrelevant
+				if (srec->uid[M] >= minwuid)
+					continue;  // Message is in non-expired range
+				if ((svars->opts[M] & OPEN_NEW) && srec->uid[M] >= svars->maxuid[M])
+					continue;  // Message is in expired range, but new range overlaps that
+				if (!srec->uid[S] && !(srec->status & S_PENDING))
+					continue;  // Only actually paired up messages matter
+				// The pair is alive, but outside the bulk range
+				*uint_array_append( &mexcs ) = srec->uid[M];
 			}
 			sort_uint_array( mexcs.array );
 		} else {
