@@ -40,6 +40,13 @@ typedef unsigned long ulong;
 #define stringify__(x) #x
 #define stringify(x) stringify__(x)
 
+// From https://stackoverflow.com/a/62984543/3685191
+#define deparen(x) esc_(ish_ x)
+#define esc_(...) esc__(__VA_ARGS__)
+#define esc__(...) van_ ## __VA_ARGS__
+#define ish_(...) ish_ __VA_ARGS__
+#define van_ish_
+
 #define shifted_bit(in, from, to) \
 	((int)(((uint)(in) / (from > to ? from / to : 1) * (to > from ? to / from : 1)) & to))
 
