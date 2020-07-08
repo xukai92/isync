@@ -204,7 +204,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 	if (excs.size) {
 		debugn( "  excs:" );
 		for (int t = 0; t < excs.size; t++)
-			debugn( " %d", excs.data[t] );
+			debugn( " %u", excs.data[t] );
 		debug( "\n" );
 	}
 //# END

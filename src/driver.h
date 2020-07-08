@@ -176,10 +176,10 @@ struct driver {
 	/* Open the selected mailbox.
 	 * Note that this should not directly complain about failure to open. */
 	void (*open_box)( store_t *ctx,
-	                  void (*cb)( int sts, int uidvalidity, void *aux ), void *aux );
+	                  void (*cb)( int sts, uint uidvalidity, void *aux ), void *aux );
 
 	/* Return the minimal UID the next stored message will have. */
-	int (*get_uidnext)( store_t *ctx );
+	uint (*get_uidnext)( store_t *ctx );
 
 	/* Return the flags that can be stored in the selected mailbox. */
 	xint (*get_supported_flags)( store_t *ctx );

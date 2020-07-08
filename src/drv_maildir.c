@@ -697,7 +697,7 @@ maildir_store_uidval( maildir_store_t *ctx )
 static int
 maildir_init_uidval( maildir_store_t *ctx )
 {
-	ctx->uidvalidity = time( 0 );
+	ctx->uidvalidity = (uint)time( 0 );
 	ctx->nuid = 0;
 	ctx->uvok = 0;
 #ifdef USE_DB
@@ -1279,7 +1279,7 @@ maildir_get_box_path( store_t *gctx )
 
 static void
 maildir_open_box( store_t *gctx,
-                  void (*cb)( int sts, int uidvalidity, void *aux ), void *aux )
+                  void (*cb)( int sts, uint uidvalidity, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	int ret;
@@ -1324,7 +1324,7 @@ maildir_open_box( store_t *gctx,
 	cb( ret, ctx->uidvalidity, aux );
 }
 
-static int
+static uint
 maildir_get_uidnext( store_t *gctx )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;

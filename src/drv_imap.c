@@ -2392,7 +2392,7 @@ imap_get_box_path( store_t *gctx ATTR_UNUSED )
 
 typedef struct {
 	imap_cmd_t gen;
-	void (*callback)( int sts, int uidvalidity, void *aux );
+	void (*callback)( int sts, uint uidvalidity, void *aux );
 	void *callback_aux;
 } imap_cmd_open_box_t;
 
@@ -2402,7 +2402,7 @@ static void imap_open_box_p4( imap_store_t *, imap_cmd_open_box_t *, int );
 
 static void
 imap_open_box( store_t *gctx,
-               void (*cb)( int sts, int uidvalidity, void *aux ), void *aux )
+               void (*cb)( int sts, uint uidvalidity, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	imap_cmd_open_box_t *cmd;
@@ -2465,7 +2465,7 @@ imap_open_box_p4( imap_store_t *ctx, imap_cmd_open_box_t *cmdp, int response )
 	cmdp->callback( response, ctx->uidvalidity, cmdp->callback_aux );
 }
 
-static int
+static uint
 imap_get_uidnext( store_t *gctx )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -2954,12 +2954,12 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 		cmd->gen.param.create = 1;
 		cmd->gen.param.to_trash = 1;
 		if (prepare_trash( &buf, ctx ) < 0) {
-			cb( DRV_BOX_BAD, -1, aux );
+			cb( DRV_BOX_BAD, 0, aux );
 			return;
 		}
 	} else {
 		if (prepare_box( &buf, ctx ) < 0) {
-			cb( DRV_BOX_BAD, -1, aux );
+			cb( DRV_BOX_BAD, 0, aux );
 			return;
 		}
 	}

@@ -1005,11 +1005,11 @@ delete_state( sync_vars_t *svars )
 	}
 }
 
-static void box_confirmed( int sts, int uidvalidity, void *aux );
+static void box_confirmed( int sts, uint uidvalidity, void *aux );
 static void box_confirmed2( sync_vars_t *svars, int t );
 static void box_deleted( int sts, void *aux );
 static void box_created( int sts, void *aux );
-static void box_opened( int sts, int uidvalidity, void *aux );
+static void box_opened( int sts, uint uidvalidity, void *aux );
 static void box_opened2( sync_vars_t *svars, int t );
 static void load_box( sync_vars_t *svars, int t, uint minwuid, uint_array_t mexcs );
 
@@ -1085,7 +1085,7 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 }
 
 static void
-box_confirmed( int sts, int uidvalidity, void *aux )
+box_confirmed( int sts, uint uidvalidity, void *aux )
 {
 	DECL_SVARS;
 
@@ -1186,7 +1186,7 @@ box_created( int sts, void *aux )
 }
 
 static void
-box_opened( int sts, int uidvalidity, void *aux )
+box_opened( int sts, uint uidvalidity, void *aux )
 {
 	DECL_SVARS;
 
@@ -1301,7 +1301,7 @@ box_opened2( sync_vars_t *svars, int t )
 				else if (!srec->uid[S])
 					opts[S] |= OPEN_NEW|OPEN_FIND, svars->state[S] |= ST_FIND_OLD;
 				else
-					warn( "Warning: sync record (%d,%d) has stray TUID. Ignoring.\n", srec->uid[M], srec->uid[S] );
+					warn( "Warning: sync record (%u,%u) has stray TUID. Ignoring.\n", srec->uid[M], srec->uid[S] );
 			}
 		}
 	svars->opts[M] = svars->drv[M]->prepare_load_box( ctx[M], opts[M] );
@@ -1343,7 +1343,7 @@ box_opened2( sync_vars_t *svars, int t )
 	sync_deref( svars );
 }
 
-static int
+static uint
 get_seenuid( sync_vars_t *svars, int t )
 {
 	uint seenuid = 0;
@@ -1646,7 +1646,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 						if (srec->status != S_PENDING) {
 							debug( "  -> not too big any more\n" );
 							srec->status = S_PENDING;
-							jFprintf( svars, "~ %d %d %u\n", srec->uid[M], srec->uid[S], srec->status );
+							jFprintf( svars, "~ %u %u %u\n", srec->uid[M], srec->uid[S], srec->status );
 						}
 					} else {
 						if (srec->status == S_SKIPPED) {
@@ -1654,7 +1654,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 						} else {
 							debug( "  -> not %sing - too big\n", str_hl[t] );
 							srec->status = S_SKIPPED;
-							jFprintf( svars, "~ %d %d %u\n", srec->uid[M], srec->uid[S], srec->status );
+							jFprintf( svars, "~ %u %u %u\n", srec->uid[M], srec->uid[S], srec->status );
 						}
 					}
 				}
@@ -2209,8 +2209,8 @@ box_closed_p2( sync_vars_t *svars, int t )
 	// This is just an optimization, so it needs no journaling of intermediate states.
 	// However, doing it before the entry purge would require ensuring that the
 	// exception list includes all relevant messages.
-	debug( "max expired uid on master is now %d\n", svars->mmaxxuid );
-	jFprintf( svars, "! %d\n", svars->mmaxxuid );
+	debug( "max expired uid on master is now %u\n", svars->mmaxxuid );
+	jFprintf( svars, "! %u\n", svars->mmaxxuid );
 
 	save_state( svars );
 
