@@ -1572,14 +1572,9 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		}
 	}
 
-	debug( "synchronizing new entries\n" );
 	for (t = 0; t < 2; t++) {
+		debug( "synchronizing new messages on %s\n", str_fn[1-t] );
 		for (tmsg = svars->msgs[1-t]; tmsg; tmsg = tmsg->next) {
-			// If new have no srec, the message is always New. If we have a srec:
-			// - message is paired or expired => ignore
-			// - message was skipped => ReNew
-			// - message was attempted, but is still pending or failed => New
-			//
 			// If messages were previously ignored due to being excessive, they would now
 			// appear to be newer than the messages that got actually synced, so increment
 			// newmaxuid immediately to make sure we always look only at the newest ones.
@@ -1588,47 +1583,66 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			// in case of interruption - in particular skipping big messages would otherwise
 			// up the limit too early.
 			srec = tmsg->srec;
-			if (srec ? (((srec->status & S_PENDING) && (svars->chan->ops[t] & OP_NEW)) ||
-			            ((srec->status & S_SKIPPED) && (svars->chan->ops[t] & OP_RENEW)))
-			         : svars->newmaxuid[1-t] < tmsg->uid && (svars->chan->ops[t] & OP_NEW)) {
-				debug( "new message %u on %s\n", tmsg->uid, str_fn[1-t] );
-				if ((svars->chan->ops[t] & OP_EXPUNGE) && (tmsg->flags & F_DELETED)) {
-					if (srec) {
-						JLOG( "- %u %u", (srec->uid[F], srec->uid[N]), "killing - would be expunged anyway" );
-						tmsg->srec = NULL;
-						srec->status = S_DEAD;
-					} else {
-						debug( "-> ignoring - would be expunged anyway\n" );
-					}
+			if (srec) {
+				if (srec->status & S_SKIPPED) {
+					// The message was skipped due to being too big.
+					if (!(svars->chan->ops[t] & OP_RENEW))
+						continue;
 				} else {
-					if (srec) {
-						debug( "-> pair(%u,%u) exists\n", srec->uid[F], srec->uid[N] );
-					} else {
-						srec = nfcalloc( sizeof(*srec) );
-						*svars->srecadd = srec;
-						svars->srecadd = &srec->next;
-						svars->nsrecs++;
-						srec->status = S_PENDING;
-						srec->uid[1-t] = tmsg->uid;
-						srec->msg[1-t] = tmsg;
-						tmsg->srec = srec;
-						if (svars->newmaxuid[1-t] < tmsg->uid)
-							svars->newmaxuid[1-t] = tmsg->uid;
-						JLOG( "+ %u %u", (srec->uid[F], srec->uid[N]), "fresh" );
-					}
-					if ((tmsg->flags & F_FLAGGED) || tmsg->size <= svars->chan->stores[t]->max_size) {
-						if (srec->status != S_PENDING) {
-							srec->status = S_PENDING;
-							JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "was too big" );
-						}
-					} else {
-						if (srec->status == S_SKIPPED) {
-							debug( "-> still too big\n" );
-						} else {
-							srec->status = S_SKIPPED;
-							JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "skipping - too big" );
-						}
-					}
+					if (!(svars->chan->ops[t] & OP_NEW))
+						continue;
+					if (!(srec->status & S_PENDING))
+						continue;  // Nothing to do - the message is paired or expired
+					// Propagation was scheduled, but we got interrupted
+				}
+				debug( "unpropagated old message %u\n", tmsg->uid );
+
+				if ((svars->chan->ops[t] & OP_EXPUNGE) && (tmsg->flags & F_DELETED)) {
+					JLOG( "- %u %u", (srec->uid[F], srec->uid[N]), "killing - would be expunged anyway" );
+					tmsg->srec = NULL;
+					srec->status = S_DEAD;
+					continue;
+				}
+			} else {
+				if (!(svars->chan->ops[t] & OP_NEW))
+					continue;
+				if (tmsg->uid <= svars->newmaxuid[1-t]) {
+					// The message should be already paired. It's not, so it was:
+					// - previously paired, but the entry was expired and pruned => ignore
+					// - attempted, but failed => ignore (the wisdom of this is debatable)
+					// - ignored, as it would have been expunged anyway => ignore (even if undeleted)
+					continue;
+				}
+				debug( "new message %u\n", tmsg->uid );
+
+				if ((svars->chan->ops[t] & OP_EXPUNGE) && (tmsg->flags & F_DELETED)) {
+					debug( "-> ignoring - would be expunged anyway\n" );
+					continue;
+				}
+
+				srec = nfcalloc( sizeof(*srec) );
+				*svars->srecadd = srec;
+				svars->srecadd = &srec->next;
+				svars->nsrecs++;
+				srec->status = S_PENDING;
+				srec->uid[1-t] = tmsg->uid;
+				srec->msg[1-t] = tmsg;
+				tmsg->srec = srec;
+				if (svars->newmaxuid[1-t] < tmsg->uid)
+					svars->newmaxuid[1-t] = tmsg->uid;
+				JLOG( "+ %u %u", (srec->uid[F], srec->uid[N]), "fresh" );
+			}
+			if ((tmsg->flags & F_FLAGGED) || tmsg->size <= svars->chan->stores[t]->max_size) {
+				if (srec->status != S_PENDING) {
+					srec->status = S_PENDING;
+					JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "was too big" );
+				}
+			} else {
+				if (srec->status == S_SKIPPED) {
+					debug( "-> still too big\n" );
+				} else {
+					srec->status = S_SKIPPED;
+					JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "skipping - too big" );
 				}
 			}
 		}
