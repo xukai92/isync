@@ -41,7 +41,7 @@ typedef unsigned long ulong;
 #define stringify(x) stringify__(x)
 
 #define shifted_bit(in, from, to) \
-	(((uint)(in) / (from > to ? from / to : 1) * (to > from ? to / from : 1)) & to)
+	((int)(((uint)(in) / (from > to ? from / to : 1) * (to > from ? to / from : 1)) & to))
 
 #if __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 4)
 # define ATTR_UNUSED __attribute__((unused))
@@ -112,7 +112,7 @@ extern int Pid;
 extern char Hostname[256];
 extern const char *Home;
 
-extern int BufferLimit;
+extern uint BufferLimit;
 
 extern int new_total[2], new_done[2];
 extern int flags_total[2], flags_done[2];
@@ -139,7 +139,7 @@ typedef struct string_list {
 	char string[1];
 } ATTR_PACKED(void *) string_list_t;
 
-void add_string_list_n( string_list_t **list, const char *str, int len );
+void add_string_list_n( string_list_t **list, const char *str, uint len );
 void add_string_list( string_list_t **list, const char *str );
 void free_string_list( string_list_t *list );
 
@@ -150,9 +150,9 @@ void *memrchr( const void *s, int c, size_t n );
 size_t strnlen( const char *str, size_t maxlen );
 #endif
 
-int starts_with( const char *str, int strl, const char *cmp, int cmpl );
-int starts_with_upper( const char *str, int strl, const char *cmp, int cmpl );
-int equals( const char *str, int strl, const char *cmp, int cmpl );
+int starts_with( const char *str, int strl, const char *cmp, uint cmpl );
+int starts_with_upper( const char *str, int strl, const char *cmp, uint cmpl );
+int equals( const char *str, int strl, const char *cmp, uint cmpl );
 
 #ifndef HAVE_TIMEGM
 time_t timegm( struct tm *tm );
@@ -170,16 +170,16 @@ void ATTR_NORETURN oob( void );
 
 char *expand_strdup( const char *s );
 
-int map_name( const char *arg, char **result, int reserve, const char *in, const char *out );
+int map_name( const char *arg, char **result, uint reserve, const char *in, const char *out );
 
 #define DEFINE_ARRAY_TYPE(T) \
 	typedef struct { \
 		T *data; \
-		int size; \
+		uint size; \
 	} ATTR_PACKED(T *) T##_array_t; \
 	typedef struct { \
 		T##_array_t array; \
-		int alloc; \
+		uint alloc; \
 	} ATTR_PACKED(T *) T##_array_alloc_t; \
 	static INLINE T *T##_array_append( T##_array_alloc_t *arr ) \
 	{ \
@@ -205,7 +205,7 @@ int find_uint_array( const uint_array_t array, uint value );
 void arc4_init( void );
 uchar arc4_getbyte( void );
 
-int bucketsForSize( int size );
+uint bucketsForSize( uint size );
 
 typedef struct list_head {
 	struct list_head *next, *prev;
@@ -216,7 +216,7 @@ typedef struct notifier {
 	void (*cb)( int what, void *aux );
 	void *aux;
 #ifdef HAVE_SYS_POLL_H
-	int index;
+	uint index;
 #else
 	int fd;
 	short events;

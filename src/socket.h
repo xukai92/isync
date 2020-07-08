@@ -62,7 +62,7 @@ typedef struct {
 
 typedef struct buff_chunk {
 	struct buff_chunk *next;
-	int len;
+	uint len;
 	char data[1];
 } buff_chunk_t;
 
@@ -105,15 +105,15 @@ typedef struct {
 	buff_chunk_t *write_buf, **write_buf_append; /* buffer head & tail */
 	int writing;
 #ifdef HAVE_LIBZ
-	int append_avail; /* space left in accumulating buffer */
+	uint append_avail; /* space left in accumulating buffer */
 #endif
-	int write_offset; /* offset into buffer head */
-	int buffer_mem; /* memory currently occupied by buffers in the queue */
+	uint write_offset; /* offset into buffer head */
+	uint buffer_mem; /* memory currently occupied by buffers in the queue */
 
 	/* reading */
-	int offset; /* start of filled bytes in buffer */
-	int bytes; /* number of filled bytes in buffer */
-	int scanoff; /* offset to continue scanning for newline at, relative to 'offset' */
+	uint offset; /* start of filled bytes in buffer */
+	uint bytes; /* number of filled bytes in buffer */
+	uint scanoff; /* offset to continue scanning for newline at, relative to 'offset' */
 	char buf[100000];
 #ifdef HAVE_LIBZ
 	char z_buf[100000];
@@ -142,12 +142,12 @@ void socket_start_tls(conn_t *conn, void (*cb)( int ok, void *aux ) );
 void socket_start_deflate( conn_t *conn );
 void socket_close( conn_t *sock );
 void socket_expect_activity( conn_t *sock, int expect );
-int socket_read( conn_t *sock, char *buf, int len ); /* never waits */
+int socket_read( conn_t *sock, char *buf, uint len ); /* never waits */
 char *socket_read_line( conn_t *sock ); /* don't free return value; never waits */
 typedef enum { KeepOwn = 0, GiveOwn } ownership_t;
 typedef struct {
 	char *buf;
-	int len;
+	uint len;
 	ownership_t takeOwn;
 } conn_iovec_t;
 void socket_write( conn_t *sock, conn_iovec_t *iov, int iovcnt );

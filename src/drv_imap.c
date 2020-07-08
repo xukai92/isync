@@ -53,7 +53,7 @@ typedef struct imap_server_conf {
 	char *pass;
 	char *pass_cmd;
 	int max_in_progress;
-	int cap_mask;
+	uint cap_mask;
 	string_list_t *auth_mechs;
 #ifdef HAVE_LIBSSL
 	char ssl_type;
@@ -71,7 +71,7 @@ typedef struct {
 
 typedef struct {
 	message_t gen;
-/*	int seq; will be needed when expunges are tracked */
+/*	uint seq; will be needed when expunges are tracked */
 } imap_message_t;
 
 #define NIL	(void*)0x1
@@ -80,7 +80,7 @@ typedef struct {
 typedef struct _list {
 	struct _list *next, *child;
 	char *val;
-	int len;
+	uint len;
 } list_t;
 
 #define MAX_LIST_DEPTH 5
@@ -100,7 +100,7 @@ struct imap_store {
 	const char *label; /* foreign */
 	const char *prefix;
 	const char *name;
-	int ref_count;
+	uint ref_count;
 	uint opts;
 	enum { SST_BAD, SST_HALF, SST_GOOD } state;
 	/* trash folder's existence is not confirmed yet */
@@ -124,7 +124,7 @@ struct imap_store {
 	int nexttag, num_in_progress;
 	imap_cmd_t *pending, **pending_append;
 	imap_cmd_t *in_progress, **in_progress_append;
-	int buffer_mem; /* memory currently occupied by buffers in the queue */
+	uint buffer_mem; /* memory currently occupied by buffers in the queue */
 
 	/* Used during sequential operations like connect */
 	enum { GreetingPending = 0, GreetingBad, GreetingOk, GreetingPreauth } greeting;
@@ -158,7 +158,7 @@ struct imap_cmd {
 		int (*cont)( imap_store_t *ctx, imap_cmd_t *cmd, const char *prompt );
 		void (*done)( imap_store_t *ctx, imap_cmd_t *cmd, int response );
 		char *data;
-		int data_len;
+		uint data_len;
 		uint uid; /* to identify fetch responses */
 		char high_prio; /* if command is queued, put it at the front of the queue. */
 		char to_trash; /* we are storing to trash, not current. */
@@ -195,7 +195,7 @@ typedef struct {
 } imap_cmd_find_new_t;
 
 typedef struct {
-	int ref_count;
+	uint ref_count;
 	int ret_val;
 } imap_cmd_refcounted_state_t;
 
@@ -258,7 +258,7 @@ static const char *Flags[] = {
 };
 
 static imap_cmd_t *
-new_imap_cmd( int size )
+new_imap_cmd( uint size )
 {
 	imap_cmd_t *cmd = nfmalloc( size );
 	memset( &cmd->param, 0, sizeof(cmd->param) );
@@ -290,7 +290,8 @@ done_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd, int response )
 static void
 send_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd )
 {
-	int bufl, litplus, iovcnt = 1;
+	int litplus, iovcnt = 1;
+	int bufl;
 	const char *buffmt;
 	conn_iovec_t iov[3];
 	char buf[4096];
@@ -323,7 +324,7 @@ DIAG_POP
 		fflush( stdout );
 	}
 	iov[0].buf = buf;
-	iov[0].len = bufl;
+	iov[0].len = (uint)bufl;
 	iov[0].takeOwn = KeepOwn;
 	if (litplus) {
 		if (DFlags & DEBUG_NET_ALL) {
@@ -451,7 +452,6 @@ imap_vprintf( const char *fmt, va_list ap )
 {
 	const char *s;
 	char *d, *ed;
-	int maxlen;
 	char c;
 	char buf[4096];
 
@@ -461,14 +461,14 @@ imap_vprintf( const char *fmt, va_list ap )
 	for (;;) {
 		c = *fmt;
 		if (!c || c == '%') {
-			int l = fmt - s;
+			uint l = fmt - s;
 			if (d + l > ed)
 				oob();
 			memcpy( d, s, l );
 			d += l;
 			if (!c)
-				return nfstrndup( buf, d - buf );
-			maxlen = INT_MAX;
+				return nfstrndup( buf, (size_t)(d - buf) );
+			uint maxlen = UINT_MAX;
 			c = *++fmt;
 			if (c == '\\') {
 				c = *++fmt;
@@ -491,7 +491,7 @@ imap_vprintf( const char *fmt, va_list ap )
 						fputs( "Fatal: unsupported string length specification. Please report a bug.\n", stderr );
 						abort();
 					}
-					maxlen = va_arg( ap , int );
+					maxlen = va_arg( ap, uint );
 					c = *++fmt;
 				}
 				if (c == 'c') {
@@ -578,7 +578,7 @@ imap_done_simple_msg( imap_store_t *ctx ATTR_UNUSED,
 }
 
 static imap_cmd_refcounted_state_t *
-imap_refcounted_new_state( int sz )
+imap_refcounted_new_state( uint sz )
 {
 	imap_cmd_refcounted_state_t *sts = nfmalloc( sz );
 	sts->ref_count = 1; /* so forced sync does not cause an early exit */
@@ -787,7 +787,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			goto next2;
 		} else if (ctx && *s == '{') {
 			/* literal */
-			bytes = cur->len = strtol( s + 1, &s, 10 );
+			bytes = (int)(cur->len = strtoul( s + 1, &s, 10 ));
 			if (*s != '}' || *++s)
 				goto bail;
 
@@ -795,7 +795,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			s[cur->len] = 0;
 
 		  getbytes:
-			n = socket_read( &ctx->conn, s, bytes );
+			n = socket_read( &ctx->conn, s, (uint)bytes );
 			if (n < 0) {
 			  badeof:
 				error( "IMAP error: unexpected EOF from %s\n", ctx->conn.name );
@@ -832,7 +832,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 					goto bail;
 				*d++ = c;
 			}
-			cur->len = d - p;
+			cur->len = (uint)(d - p);
 			cur->val = nfstrndup( p, cur->len );
 		} else {
 			/* atom */
@@ -840,8 +840,8 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			for (; *s && !isspace( (uchar)*s ); s++)
 				if (sts->level && *s == ')')
 					break;
-			cur->len = s - p;
-			if (equals( p, cur->len, "NIL", 3 ))
+			cur->len = (uint)(s - p);
+			if (equals( p, (int)cur->len, "NIL", 3 ))
 				cur->val = NIL;
 			else
 				cur->val = nfstrndup( p, cur->len );
@@ -975,8 +975,8 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	imap_message_t *cur;
 	msg_data_t *msgdata;
 	imap_cmd_t *cmdp;
-	int mask = 0, status = 0, size = 0;
-	uint i, uid = 0;
+	uchar mask = 0, status = 0;
+	uint i, uid = 0, size = 0;
 	time_t date = 0;
 
 	if (!is_list( list )) {
@@ -1080,7 +1080,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 							in_msgid = 1;
 							continue;
 						}
-						msgid = nfstrndup( val + off, len - off );
+						msgid = nfstrndup( val + off, (size_t)(len - off) );
 						in_msgid = 0;
 					}
 				} else {
@@ -1291,7 +1291,8 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 {
 	string_list_t *narg;
 	char *arg;
-	int argl, l;
+	int argl;
+	uint l;
 
 	if (!is_atom( list )) {
 		error( "IMAP error: malformed LIST response\n" );
@@ -1299,7 +1300,7 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 		return LIST_BAD;
 	}
 	arg = list->val;
-	argl = list->len;
+	argl = (int)list->len;
 	if (is_inbox( ctx, arg, argl )) {
 		// The server might be weird and have a non-uppercase INBOX. It
 		// may legitimately do so, but we need the canonical spelling.
@@ -1335,7 +1336,7 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 static int
 prepare_name( char **buf, const imap_store_t *ctx, const char *prefix, const char *name )
 {
-	int pl = strlen( prefix );
+	uint pl = strlen( prefix );
 
 	switch (map_name( name, buf, pl, "/", ctx->delimiter )) {
 	case -1:
@@ -2172,7 +2173,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 						skipped_login = 1;
 #ifdef HAVE_LIBSASL
 				} else {
-					int len = strlen( cmech->string );
+					uint len = strlen( cmech->string );
 					if (saslend + len + 2 > saslmechs + sizeof(saslmechs))
 						oob();
 					*saslend++ = ' ';
@@ -2567,8 +2568,8 @@ imap_finish_delete_box( store_t *gctx ATTR_UNUSED )
 
 /******************* imap_load_box *******************/
 
-static int
-imap_prepare_load_box( store_t *gctx, int opts )
+static uint
+imap_prepare_load_box( store_t *gctx, uint opts )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
@@ -2578,14 +2579,15 @@ imap_prepare_load_box( store_t *gctx, int opts )
 
 enum { WantSize = 1, WantTuids = 2, WantMsgids = 4 };
 typedef struct {
-	int first, last, flags;
+	uint first, last;
+	int flags;
 } imap_range_t;
 
 static void
-imap_set_range( imap_range_t *ranges, int *nranges, int low_flags, int high_flags, int maxlow )
+imap_set_range( imap_range_t *ranges, uint *nranges, int low_flags, int high_flags, uint maxlow )
 {
 	if (low_flags != high_flags) {
-		for (int r = 0; r < *nranges; r++) {
+		for (uint r = 0; r < *nranges; r++) {
 			if (ranges[r].first > maxlow)
 				break; /* Range starts above split point; so do all subsequent ranges. */
 			if (ranges[r].last < maxlow)
@@ -2599,7 +2601,7 @@ imap_set_range( imap_range_t *ranges, int *nranges, int low_flags, int high_flag
 			break;
 		}
 	}
-	for (int r = 0; r < *nranges; r++)
+	for (uint r = 0; r < *nranges; r++)
 		ranges[r].flags |= (ranges[r].last <= maxlow) ? low_flags : high_flags;
 }
 
@@ -2617,7 +2619,6 @@ imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenui
                void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
-	int i, j, bl;
 	char buf[1000];
 
 	if (!ctx->total_msgs) {
@@ -2625,12 +2626,12 @@ imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenui
 		cb( DRV_OK, 0, 0, 0, aux );
 	} else {
 		INIT_REFCOUNTED_STATE(imap_load_box_state_t, sts, cb, aux)
-		for (i = 0; i < excs.size; ) {
-			for (bl = 0; i < excs.size && bl < 960; i++) {
+		for (uint i = 0; i < excs.size; ) {
+			for (int bl = 0; i < excs.size && bl < 960; i++) {
 				if (bl)
 					buf[bl++] = ',';
 				bl += sprintf( buf + bl, "%u", excs.data[i] );
-				j = i;
+				uint j = i;
 				for (; i + 1 < excs.size && excs.data[i + 1] == excs.data[i] + 1; i++) {}
 				if (i != j)
 					bl += sprintf( buf + bl, ":%u", excs.data[i] );
@@ -2644,7 +2645,7 @@ imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenui
 			ranges[0].first = minuid;
 			ranges[0].last = maxuid;
 			ranges[0].flags = 0;
-			int nranges = 1;
+			uint nranges = 1;
 			if (ctx->opts & (OPEN_OLD_SIZE | OPEN_NEW_SIZE))
 				imap_set_range( ranges, &nranges, shifted_bit( ctx->opts, OPEN_OLD_SIZE, WantSize),
 				                                  shifted_bit( ctx->opts, OPEN_NEW_SIZE, WantSize), seenuid );
@@ -2652,7 +2653,7 @@ imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenui
 				imap_set_range( ranges, &nranges, 0, WantTuids, newuid - 1 );
 			if (ctx->opts & OPEN_OLD_IDS)
 				imap_set_range( ranges, &nranges, WantMsgids, 0, seenuid );
-			for (int r = 0; r < nranges; r++) {
+			for (uint r = 0; r < nranges; r++) {
 				sprintf( buf, "%u:%u", ranges[r].first, ranges[r].last );
 				imap_submit_load( ctx, buf, ranges[r].flags, sts );
 			}
@@ -2678,14 +2679,14 @@ imap_sort_msgs_comp( const void *a_, const void *b_ )
 static void
 imap_sort_msgs( imap_store_t *ctx )
 {
-	int count = count_generic_messages( ctx->msgs );
+	uint count = count_generic_messages( ctx->msgs );
 	if (count <= 1)
 		return;
 
 	message_t **t = nfmalloc( sizeof(*t) * count );
 
 	message_t *m = ctx->msgs;
-	for (int i = 0; i < count; i++) {
+	for (uint i = 0; i < count; i++) {
 		t[i] = m;
 		m = m->next;
 	}
@@ -2694,7 +2695,7 @@ imap_sort_msgs( imap_store_t *ctx )
 
 	ctx->msgs = t[0];
 
-	int j;
+	uint j;
 	for (j = 0; j < count - 1; j++)
 		t[j]->next = t[j + 1];
 	ctx->msgapp = &t[j]->next;
@@ -2771,7 +2772,7 @@ imap_fetch_msg_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 
 /******************* imap_set_msg_flags *******************/
 
-static int
+static uint
 imap_make_flags( int flags, char *buf )
 {
 	const char *s;
@@ -2946,7 +2947,7 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	imap_cmd_out_uid_t *cmd;
 	char *buf;
-	int d;
+	uint d;
 	char flagstr[128], datestr[64];
 
 	d = 0;
@@ -3166,7 +3167,7 @@ imap_commit_cmds( store_t *gctx )
 
 /******************* imap_get_memory_usage *******************/
 
-static int
+static uint
 imap_get_memory_usage( store_t *gctx )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -3485,7 +3486,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 	return 1;
 }
 
-static int
+static uint
 imap_get_caps( store_t *gctx ATTR_UNUSED )
 {
 	return DRV_CRLF | DRV_VERBOSE;

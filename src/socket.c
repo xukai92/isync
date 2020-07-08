@@ -250,7 +250,7 @@ DIAG_POP
 		return 0;
 	}
 
-	int options = SSL_OP_NO_SSLv3;
+	uint options = SSL_OP_NO_SSLv3;
 	if (!(conf->ssl_versions & TLSv1))
 		options |= SSL_OP_NO_TLSv1;
 #ifdef SSL_OP_NO_TLSv1_1
@@ -678,9 +678,9 @@ socket_close( conn_t *sock )
 }
 
 static int
-prepare_read( conn_t *sock, char **buf, int *len )
+prepare_read( conn_t *sock, char **buf, uint *len )
 {
-	int n = sock->offset + sock->bytes;
+	uint n = sock->offset + sock->bytes;
 	if (!(*len = sizeof(sock->buf) - n)) {
 		error( "Socket error: receive buffer full. Probably protocol error.\n" );
 		socket_fail( sock );
@@ -691,17 +691,17 @@ prepare_read( conn_t *sock, char **buf, int *len )
 }
 
 static int
-do_read( conn_t *sock, char *buf, int len )
+do_read( conn_t *sock, char *buf, uint len )
 {
 	int n;
 
 	assert( sock->fd >= 0 );
 #ifdef HAVE_LIBSSL
 	if (sock->ssl) {
-		if ((n = ssl_return( "read from", sock, SSL_read( sock->ssl, buf, len ) )) <= 0)
+		if ((n = ssl_return( "read from", sock, SSL_read( sock->ssl, buf, (int)len ) )) <= 0)
 			return n;
 
-		if (n == len && SSL_pending( sock->ssl ))
+		if (n == (int)len && SSL_pending( sock->ssl ))
 			conf_wakeup( &sock->ssl_fake, 0 );
 	} else
 #endif
@@ -724,7 +724,8 @@ static void
 socket_fill_z( conn_t *sock )
 {
 	char *buf;
-	int len, ret;
+	uint len;
+	int ret;
 
 	if (prepare_read( sock, &buf, &len ) < 0)
 		return;
@@ -744,7 +745,7 @@ socket_fill_z( conn_t *sock )
 	if (!sock->in_z->avail_out)
 		conf_wakeup( &sock->z_fake, 0 );
 
-	if ((len = (char *)sock->in_z->next_out - buf)) {
+	if ((len = (uint)((char *)sock->in_z->next_out - buf))) {
 		sock->bytes += len;
 		sock->read_callback( sock->callback_aux );
 	}
@@ -762,21 +763,22 @@ socket_fill( conn_t *sock )
 		sock->in_z->next_in = (uchar *)sock->z_buf;
 		if ((ret = do_read( sock, sock->z_buf, sizeof(sock->z_buf) )) <= 0)
 			return;
-		sock->in_z->avail_in = ret;
+		sock->in_z->avail_in = (uint)ret;
 		socket_fill_z( sock );
 	} else
 #endif
 	{
 		char *buf;
-		int len;
+		uint len;
 
 		if (prepare_read( sock, &buf, &len ) < 0)
 			return;
 
-		if ((len = do_read( sock, buf, len )) <= 0)
+		int n;
+		if ((n = do_read( sock, buf, len )) <= 0)
 			return;
 
-		sock->bytes += len;
+		sock->bytes += (uint)n;
 		sock->read_callback( sock->callback_aux );
 	}
 }
@@ -789,9 +791,9 @@ socket_expect_activity( conn_t *conn, int expect )
 }
 
 int
-socket_read( conn_t *conn, char *buf, int len )
+socket_read( conn_t *conn, char *buf, uint len )
 {
-	int n = conn->bytes;
+	uint n = conn->bytes;
 	if (!n && conn->state == SCK_EOF)
 		return -1;
 	if (n > len)
@@ -801,14 +803,14 @@ socket_read( conn_t *conn, char *buf, int len )
 		conn->offset = 0;
 	else
 		conn->offset += n;
-	return n;
+	return (int)n;
 }
 
 char *
 socket_read_line( conn_t *b )
 {
 	char *p, *s;
-	int n;
+	uint n;
 
 	s = b->buf + b->offset;
 	p = memchr( s + b->scanoff, '\n', b->bytes - b->scanoff );
@@ -822,7 +824,7 @@ socket_read_line( conn_t *b )
 			return (void *)~0;
 		return 0;
 	}
-	n = p + 1 - s;
+	n = (uint)(p + 1 - s);
 	b->offset += n;
 	b->bytes -= n;
 	b->scanoff = 0;
@@ -833,14 +835,14 @@ socket_read_line( conn_t *b )
 }
 
 static int
-do_write( conn_t *sock, char *buf, int len )
+do_write( conn_t *sock, char *buf, uint len )
 {
 	int n;
 
 	assert( sock->fd >= 0 );
 #ifdef HAVE_LIBSSL
 	if (sock->ssl)
-		return ssl_return( "write to", sock, SSL_write( sock->ssl, buf, len ) );
+		return ssl_return( "write to", sock, SSL_write( sock->ssl, buf, (int)len ) );
 #endif
 	n = write( sock->fd, buf, len );
 	if (n < 0) {
@@ -851,7 +853,7 @@ do_write( conn_t *sock, char *buf, int len )
 			n = 0;
 			conf_notifier( &sock->notify, POLLIN, POLLOUT );
 		}
-	} else if (n != len) {
+	} else if (n != (int)len) {
 		conf_notifier( &sock->notify, POLLIN, POLLOUT );
 	}
 	return n;
@@ -876,11 +878,12 @@ do_queued_write( conn_t *conn )
 		return 0;
 
 	while ((bc = conn->write_buf)) {
-		int n, len = bc->len - conn->write_offset;
+		int n;
+		uint len = bc->len - conn->write_offset;
 		if ((n = do_write( conn, bc->data + conn->write_offset, len )) < 0)
 			return -1;
-		if (n != len) {
-			conn->write_offset += n;
+		if (n != (int)len) {
+			conn->write_offset += (uint)n;
 			conn->writing = 1;
 			return 0;
 		}
@@ -915,7 +918,7 @@ do_flush( conn_t *conn )
 	buff_chunk_t *bc = conn->append_buf;
 #ifdef HAVE_LIBZ
 	if (conn->out_z) {
-		int buf_avail = conn->append_avail;
+		uint buf_avail = conn->append_avail;
 		if (!conn->z_written)
 			return;
 		do {
@@ -936,7 +939,7 @@ do_flush( conn_t *conn )
 				error( "Fatal: Compression error: %s\n", z_err_msg( ret, conn->out_z ) );
 				abort();
 			}
-			bc->len = (char *)conn->out_z->next_out - bc->data;
+			bc->len = (uint)((char *)conn->out_z->next_out - bc->data);
 			if (bc->len) {
 				do_append( conn, bc );
 				bc = 0;
@@ -962,7 +965,8 @@ do_flush( conn_t *conn )
 void
 socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 {
-	int i, buf_avail, len, offset = 0, total = 0;
+	int i;
+	uint buf_avail, len, offset = 0, total = 0;
 	buff_chunk_t *bc;
 
 	for (i = 0; i < iovcnt; i++)
@@ -1006,7 +1010,7 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 					error( "Fatal: Compression error: %s\n", z_err_msg( ret, conn->out_z ) );
 					abort();
 				}
-				bc->len = (char *)conn->out_z->next_out - bc->data;
+				bc->len = (uint)((char *)conn->out_z->next_out - bc->data);
 				buf_avail = conn->out_z->avail_out;
 				len -= conn->out_z->avail_in;
 				conn->z_written = 1;

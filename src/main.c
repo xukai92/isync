@@ -47,7 +47,7 @@ int Pid;		/* for maildir and imap */
 char Hostname[256];	/* for maildir */
 const char *Home;	/* for config */
 
-int BufferLimit = 10 * 1024 * 1024;
+uint BufferLimit = 10 * 1024 * 1024;
 
 static int chans_total, chans_done;
 static int boxes_total, boxes_done;
@@ -264,7 +264,7 @@ filter_boxes( string_list_t *boxes, const char *prefix, string_list_t *patterns 
 	string_list_t *cpat;
 	char **boxarr = 0;
 	const char *ps;
-	int not, fnot, pfxl, num = 0, rnum = 0;
+	uint not, fnot, pfxl, num = 0, rnum = 0;
 
 	pfxl = prefix ? strlen( prefix ) : 0;
 	for (; boxes; boxes = boxes->next) {
@@ -350,7 +350,8 @@ add_named_channel( chan_ent_t ***chanapp, char *channame, int ops[] )
 	chan_ent_t *ce;
 	box_ent_t *boxes = 0, **mboxapp = &boxes, *mbox;
 	char *boxp, *nboxp;
-	int boxl, boxlist = 0;
+	size_t boxl;
+	char boxlist = 0;
 
 	if ((boxp = strchr( channame, ':' )))
 		*boxp++ = 0;
@@ -369,7 +370,7 @@ add_named_channel( chan_ent_t ***chanapp, char *channame, int ops[] )
 		do {
 			nboxp = strpbrk( boxp, ",\n" );
 			if (nboxp) {
-				boxl = nboxp - boxp;
+				boxl = (size_t)(nboxp - boxp);
 				*nboxp++ = 0;
 			} else {
 				boxl = strlen( boxp );

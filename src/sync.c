@@ -102,10 +102,11 @@ Fprintf( FILE *f, const char *msg, ... )
 /* The order is according to alphabetical maildir flag sort */
 static const char Flags[] = { 'D', 'F', 'P', 'R', 'S', 'T' };
 
-static int
+static uchar
 parse_flags( const char *buf )
 {
-	uint flags, i, d;
+	uint i, d;
+	uchar flags;
 
 	for (flags = i = d = 0; i < as(Flags); i++)
 		if (buf[d] == Flags[i]) {
@@ -115,8 +116,8 @@ parse_flags( const char *buf )
 	return flags;
 }
 
-static int
-make_flags( int flags, char *buf )
+static uint
+make_flags( uchar flags, char *buf )
 {
 	uint i, d;
 
@@ -162,8 +163,9 @@ typedef struct {
 	const char *orig_name[2];
 	message_t *msgs[2], *new_msgs[2];
 	uint_array_alloc_t trashed_msgs[2];
-	int state[2], opts[2], ref_count, nsrecs, ret, lfd, existing, replayed;
-	int new_pending[2], flags_pending[2], trash_pending[2];
+	int state[2], lfd, ret, existing, replayed;
+	uint ref_count, nsrecs, opts[2];
+	uint new_pending[2], flags_pending[2], trash_pending[2];
 	uint maxuid[2];     // highest UID that was already propagated
 	uint newmaxuid[2];  // highest UID that is currently being propagated
 	uint uidval[2];     // UID validity value
@@ -324,10 +326,10 @@ copy_msg( copy_vars_t *vars )
 static void msg_stored( int sts, uint uid, void *aux );
 
 static void
-copy_msg_bytes( char **out_ptr, const char *in_buf, int *in_idx, int in_len, int in_cr, int out_cr )
+copy_msg_bytes( char **out_ptr, const char *in_buf, uint *in_idx, uint in_len, int in_cr, int out_cr )
 {
 	char *out = *out_ptr;
-	int idx = *in_idx;
+	uint idx = *in_idx;
 	if (out_cr != in_cr) {
 		char c;
 		if (out_cr) {
@@ -357,19 +359,19 @@ static int
 copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 {
 	char *in_buf = vars->data.data;
-	int in_len = vars->data.len;
-	int idx = 0, sbreak = 0, ebreak = 0;
-	int lines = 0, hdr_crs = 0, bdy_crs = 0, app_cr = 0, extra = 0;
+	uint in_len = vars->data.len;
+	uint idx = 0, sbreak = 0, ebreak = 0;
+	uint lines = 0, hdr_crs = 0, bdy_crs = 0, app_cr = 0, extra = 0;
 	if (vars->srec) {
 	  nloop: ;
-		int start = idx;
-		int line_crs = 0;
+		uint start = idx;
+		uint line_crs = 0;
 		while (idx < in_len) {
 			char c = in_buf[idx++];
 			if (c == '\r') {
 				line_crs++;
 			} else if (c == '\n') {
-				if (starts_with_upper( in_buf + start, in_len - start, "X-TUID: ", 8 )) {
+				if (starts_with_upper( in_buf + start, (int)(in_len - start), "X-TUID: ", 8 )) {
 					extra = (sbreak = start) - (ebreak = idx);
 					goto oke;
 				}
@@ -591,7 +593,7 @@ static char *
 clean_strdup( const char *s )
 {
 	char *cs;
-	int i;
+	uint i;
 
 	cs = nfstrdup( s );
 	for (i = 0; cs[i]; i++)
@@ -711,7 +713,7 @@ load_state( sync_vars_t *svars )
 	sync_rec_t *srec, *nsrec;
 	char *s;
 	FILE *jfp;
-	int ll;
+	uint ll;
 	uint smaxxuid = 0;
 	char c;
 	struct stat st;
@@ -863,7 +865,7 @@ load_state( sync_vars_t *svars )
 				goto jbail;
 			}
 			buf[ll] = 0;
-			if (!equals( buf, ll, JOURNAL_VERSION, strlen(JOURNAL_VERSION) )) {
+			if (!equals( buf, (int)ll, JOURNAL_VERSION, strlen(JOURNAL_VERSION) )) {
 				error( "Error: incompatible journal version "
 				                 "(got %s, expected " JOURNAL_VERSION ")\n", buf );
 				goto jbail;
@@ -880,7 +882,7 @@ load_state( sync_vars_t *svars )
 				int tn;
 				uint t1, t2, t3;
 				if ((c = buf[0]) == '#' ?
-				      (tn = 0, (sscanf( buf + 2, "%u %u %n", &t1, &t2, &tn ) < 2) || !tn || (ll - tn != TUIDL + 2)) :
+				      (tn = 0, (sscanf( buf + 2, "%u %u %n", &t1, &t2, &tn ) < 2) || !tn || (ll - (uint)tn != TUIDL + 2)) :
 				      c == 'S' || c == '!' ?
 				        (sscanf( buf + 2, "%u", &t1 ) != 1) :
 				        c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '=' || c == '|' ?
@@ -1202,8 +1204,7 @@ box_opened2( sync_vars_t *svars, int t )
 	channel_conf_t *chan;
 	sync_rec_t *srec;
 	uint_array_alloc_t mexcs;
-	uint minwuid;
-	int opts[2], fails;
+	uint opts[2], fails, minwuid;
 
 	svars->state[t] |= ST_SELECTED;
 	if (!(svars->state[1-t] & ST_SELECTED))
@@ -1260,7 +1261,7 @@ box_opened2( sync_vars_t *svars, int t )
 				opts[1-t] |= OPEN_NEW;
 			if (chan->ops[t] & OP_EXPUNGE)
 				opts[1-t] |= OPEN_FLAGS;
-			if (chan->stores[t]->max_size != INT_MAX) {
+			if (chan->stores[t]->max_size != UINT_MAX) {
 				if (chan->ops[t] & OP_RENEW)
 					opts[1-t] |= OPEN_FLAGS|OPEN_OLD_SIZE;
 				if (chan->ops[t] & OP_NEW)
@@ -1709,7 +1710,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			}
 		}
 		debug( "%d excess messages remain\n", todel );
-		if (svars->chan->expire_unread < 0 && (uint)alive * 2 > svars->chan->max_messages) {
+		if (svars->chan->expire_unread < 0 && alive * 2 > svars->chan->max_messages) {
 			error( "%s: %d unread messages in excess of MaxMessages (%d).\n"
 			       "Please set ExpireUnread to decide outcome. Skipping mailbox.\n",
 			       svars->orig_name[S], alive, svars->chan->max_messages );
@@ -1733,7 +1734,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 						jFprintf( svars, "~ %u %u %u\n", srec->uid[M], srec->uid[S], srec->status  );
 					} else {
 						/* ... but the "right" transaction is already pending. */
-						debug( "  pair(%u,%u): %d (pending)\n", srec->uid[M], srec->uid[S], nex );
+						debug( "  pair(%u,%u): %u (pending)\n", srec->uid[M], srec->uid[S], nex );
 					}
 				} else {
 					/* Note: the "wrong" transaction may be pending here,

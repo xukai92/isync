@@ -27,10 +27,10 @@
 
 driver_t *drivers[N_DRIVERS] = { &maildir_driver, &imap_driver };
 
-int
+uint
 count_generic_messages( message_t *msgs )
 {
-	int count = 0;
+	uint count = 0;
 	for (; msgs; msgs = msgs->next)
 		count++;
 	return count;

@@ -170,7 +170,7 @@ sys_error( const char *msg, ... )
 }
 
 void
-add_string_list_n( string_list_t **list, const char *str, int len )
+add_string_list_n( string_list_t **list, const char *str, uint len )
 {
 	string_list_t *elem;
 
@@ -210,7 +210,7 @@ vasprintf( char **strp, const char *fmt, va_list ap )
 	if (len >= (int)sizeof(tmp))
 		vsprintf( *strp, fmt, ap );
 	else
-		memcpy( *strp, tmp, len + 1 );
+		memcpy( *strp, tmp, (size_t)len + 1 );
 	return len;
 }
 #endif
@@ -239,34 +239,32 @@ strnlen( const char *str, size_t maxlen )
 #endif
 
 int
-starts_with( const char *str, int strl, const char *cmp, int cmpl )
+starts_with( const char *str, int strl, const char *cmp, uint cmpl )
 {
 	if (strl < 0)
 		strl = strnlen( str, cmpl + 1 );
-	return (strl >= cmpl) && !memcmp( str, cmp, cmpl );
+	return ((uint)strl >= cmpl) && !memcmp( str, cmp, cmpl );
 }
 
 int
-starts_with_upper( const char *str, int strl, const char *cmp, int cmpl )
+starts_with_upper( const char *str, int strl, const char *cmp, uint cmpl )
 {
-	int i;
-
 	if (strl < 0)
 		strl = strnlen( str, cmpl + 1 );
-	if (strl < cmpl)
+	if ((uint)strl < cmpl)
 		return 0;
-	for (i = 0; i < cmpl; i++)
+	for (uint i = 0; i < cmpl; i++)
 		if (str[i] != cmp[i] && toupper( str[i] ) != cmp[i])
 			return 0;
 	return 1;
 }
 
 int
-equals( const char *str, int strl, const char *cmp, int cmpl )
+equals( const char *str, int strl, const char *cmp, uint cmpl )
 {
 	if (strl < 0)
 		strl = strnlen( str, cmpl + 1 );
-	return (strl == cmpl) && !memcmp( str, cmp, cmpl );
+	return ((uint)strl == cmpl) && !memcmp( str, cmp, cmpl );
 }
 
 #ifndef HAVE_TIMEGM
@@ -348,7 +346,7 @@ nfsnprintf( char *buf, int blen, const char *fmt, ... )
 	va_list va;
 
 	va_start( va, fmt );
-	if (blen <= 0 || (uint)(ret = vsnprintf( buf, blen, fmt, va )) >= (uint)blen)
+	if (blen <= 0 || (uint)(ret = vsnprintf( buf, (size_t)blen, fmt, va )) >= (uint)blen)
 		oob();
 	va_end( va );
 	return ret;
@@ -464,7 +462,7 @@ expand_strdup( const char *s )
 			q = Home;
 		} else {
 			if ((p = strchr( s, '/' ))) {
-				r = nfstrndup( s, (int)(p - s) );
+				r = nfstrndup( s, (size_t)(p - s) );
 				pw = getpwnam( r );
 				free( r );
 			} else
@@ -481,10 +479,10 @@ expand_strdup( const char *s )
 
 /* Return value: 0 = ok, -1 = out found in arg, -2 = in found in arg but no out specified */
 int
-map_name( const char *arg, char **result, int reserve, const char *in, const char *out )
+map_name( const char *arg, char **result, uint reserve, const char *in, const char *out )
 {
 	char *p;
-	int i, l, ll, num, inl, outl;
+	uint i, l, ll, num, inl, outl;
 
 	assert( arg );
 	l = strlen( arg );
@@ -498,7 +496,7 @@ map_name( const char *arg, char **result, int reserve, const char *in, const cha
 	}
 	assert( out );
 	outl = strlen( out );
-	if (equals( in, inl, out, outl ))
+	if (equals( in, (int)inl, out, outl ))
 		goto copy;
 	for (num = 0, i = 0; i < l; ) {
 		for (ll = 0; ll < inl; ll++)
@@ -556,9 +554,9 @@ sort_uint_array( uint_array_t array )
 int
 find_uint_array( uint_array_t array, uint value )
 {
-	int bot = 0, top = array.size;
+	uint bot = 0, top = array.size;
 	while (bot < top) {
-		int i = (bot + top) / 2;
+		uint i = (bot + top) / 2;
 		uint elt = array.data[i];
 		if (elt == value)
 			return 1;
@@ -624,13 +622,13 @@ static const uchar prime_deltas[] = {
     1, 29,  3, 21,  7, 17, 15,  9, 43, 35, 15,  0,  0,  0,  0,  0
 };
 
-int
-bucketsForSize( int size )
+uint
+bucketsForSize( uint size )
 {
-	int base = 4, bits = 2;
+	uint base = 4, bits = 2;
 
 	for (;;) {
-		int prime = base + prime_deltas[bits];
+		uint prime = base + prime_deltas[bits];
 		if (prime >= size)
 			return prime;
 		base <<= 1;
@@ -665,7 +663,7 @@ static notifier_t *notifiers;
 static int changed;  /* Iterator may be invalid now. */
 #ifdef HAVE_SYS_POLL_H
 static struct pollfd *pollfds;
-static int npolls, rpolls;
+static uint npolls, rpolls;
 #else
 # ifdef HAVE_SYS_SELECT_H
 #  include <sys/select.h>
@@ -676,7 +674,7 @@ void
 init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux )
 {
 #ifdef HAVE_SYS_POLL_H
-	int idx = npolls++;
+	uint idx = npolls++;
 	if (rpolls < npolls) {
 		rpolls = npolls;
 		pollfds = nfrealloc( pollfds, npolls * sizeof(*pollfds) );
@@ -698,7 +696,7 @@ void
 conf_notifier( notifier_t *sn, short and_events, short or_events )
 {
 #ifdef HAVE_SYS_POLL_H
-	int idx = sn->index;
+	uint idx = sn->index;
 	pollfds[idx].events = (pollfds[idx].events & and_events) | or_events;
 #else
 	sn->events = (sn->events & and_events) | or_events;
@@ -710,7 +708,7 @@ wipe_notifier( notifier_t *sn )
 {
 	notifier_t **snp;
 #ifdef HAVE_SYS_POLL_H
-	int idx;
+	uint idx;
 #endif
 
 	for (snp = &notifiers; *snp != sn; snp = &(*snp)->next)
@@ -813,7 +811,7 @@ event_wait( void )
 		break;
 	}
 	for (sn = notifiers; sn; sn = sn->next) {
-		int n = sn->index;
+		uint n = sn->index;
 		if ((m = pollfds[n].revents)) {
 			assert( !(m & POLLNVAL) );
 			sn->cb( m | shifted_bit( m, POLLHUP, POLLIN ), sn->aux );

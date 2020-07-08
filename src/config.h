@@ -42,7 +42,7 @@ char *get_arg( conffile_t *cfile, int required, int *comment );
 
 char parse_bool( conffile_t *cfile );
 int parse_int( conffile_t *cfile );
-int parse_size( conffile_t *cfile );
+uint parse_size( conffile_t *cfile );
 int getcline( conffile_t *cfile );
 int merge_ops( int cops, int ops[] );
 int load_config( const char *filename, int pseudo );

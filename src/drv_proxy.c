@@ -27,7 +27,7 @@
 typedef struct {
 	store_t gen;
 	const char *label; // foreign
-	int ref_count;
+	uint ref_count;
 	driver_t *real_driver;
 	store_t *real_store;
 
@@ -61,7 +61,7 @@ debugn( const char *msg, ... )
 static const char Flags[] = { 'D', 'F', 'P', 'R', 'S', 'T' };
 
 static char *
-proxy_make_flags( int flags, char *buf )
+proxy_make_flags( uchar flags, char *buf )
 {
 	uint i, d;
 
@@ -82,13 +82,13 @@ proxy_store_deref( proxy_store_t *ctx )
 static int curr_tag;
 
 typedef struct {
-	int ref_count;
+	uint ref_count;
 	int tag;
 	proxy_store_t *ctx;
 } gen_cmd_t;
 
 static gen_cmd_t *
-proxy_cmd_new( proxy_store_t *ctx, int sz )
+proxy_cmd_new( proxy_store_t *ctx, uint sz )
 {
 	gen_cmd_t *cmd = nfmalloc( sz );
 	cmd->ref_count = 2;
@@ -203,7 +203,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# DEFINE load_box_print_args
 	if (excs.size) {
 		debugn( "  excs:" );
-		for (int t = 0; t < excs.size; t++)
+		for (uint t = 0; t < excs.size; t++)
 			debugn( " %u", excs.data[t] );
 		debug( "\n" );
 	}
@@ -216,7 +216,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# DEFINE load_box_print_cb_args
 	if (sts == DRV_OK) {
 		for (message_t *msg = msgs; msg; msg = msg->next)
-			debug( "  uid=%-5u flags=%-4s size=%-6d tuid=%." stringify(TUIDL) "s\n",
+			debug( "  uid=%-5u flags=%-4s size=%-6u tuid=%." stringify(TUIDL) "s\n",
 			       msg->uid, (msg->status & M_FLAGS) ? (proxy_make_flags( msg->flags, fbuf ), fbuf) : "?", msg->size, *msg->tuid ? msg->tuid : "?" );
 	}
 //# END
@@ -242,7 +242,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 	static char fbuf[as(Flags) + 1];
 	proxy_make_flags( cmd->data->flags, fbuf );
 //# END
-//# DEFINE fetch_msg_print_fmt_cb_args , flags=%s, date=%lld, size=%d
+//# DEFINE fetch_msg_print_fmt_cb_args , flags=%s, date=%lld, size=%u
 //# DEFINE fetch_msg_print_pass_cb_args , fbuf, (long long)cmd->data->date, cmd->data->len
 //# DEFINE fetch_msg_print_cb_args
 	if (sts == DRV_OK && (DFlags & DEBUG_DRV_ALL)) {
@@ -257,7 +257,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 	static char fbuf[as(Flags) + 1];
 	proxy_make_flags( data->flags, fbuf );
 //# END
-//# DEFINE store_msg_print_fmt_args , flags=%s, date=%lld, size=%d, to_trash=%s
+//# DEFINE store_msg_print_fmt_args , flags=%s, date=%lld, size=%u, to_trash=%s
 //# DEFINE store_msg_print_pass_args , fbuf, (long long)data->date, data->len, to_trash ? "yes" : "no"
 //# DEFINE store_msg_print_args
 	if (DFlags & DEBUG_DRV_ALL) {

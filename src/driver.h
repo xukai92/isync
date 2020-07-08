@@ -39,7 +39,7 @@ typedef struct store_conf {
 	const char *flat_delim;
 	const char *map_inbox;
 	const char *trash;
-	int max_size; /* off_t is overkill */
+	uint max_size; /* off_t is overkill */
 	char trash_remote_new, trash_only_new;
 } store_conf_t;
 
@@ -67,7 +67,7 @@ typedef struct message {
 	struct sync_rec *srec;
 	char *msgid; /* owned */
 	/* string_list_t *keywords; */
-	int size; /* zero implies "not fetched" */
+	uint size; /* zero implies "not fetched" */
 	uint uid;
 	uchar flags, status;
 	char tuid[TUIDL];
@@ -95,7 +95,7 @@ typedef struct store {
 
 typedef struct {
 	char *data;
-	int len;
+	uint len;
 	time_t date;
 	uchar flags;
 } msg_data_t;
@@ -127,7 +127,7 @@ typedef struct {
 #define LIST_PATH       2
 #define LIST_PATH_MAYBE 4
 
-#define xint int  // For auto-generation of appropriate printf() formats.
+#define xint uint  // For auto-generation of appropriate printf() formats.
 
 struct driver {
 	/* Return driver capabilities. */
@@ -258,13 +258,13 @@ struct driver {
 	void (*commit_cmds)( store_t *ctx );
 
 	/* Get approximate amount of memory occupied by the driver. */
-	int (*get_memory_usage)( store_t *ctx );
+	uint (*get_memory_usage)( store_t *ctx );
 
 	/* Get the FAIL_* state of the driver. */
 	int (*get_fail_state)( store_conf_t *conf );
 };
 
-int count_generic_messages( message_t * );
+uint count_generic_messages( message_t * );
 void free_generic_messages( message_t * );
 
 void parse_generic_store( store_conf_t *store, conffile_t *cfg );

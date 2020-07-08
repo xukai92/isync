@@ -121,13 +121,13 @@ parse_int( conffile_t *cfile )
 	return ret;
 }
 
-int
+uint
 parse_size( conffile_t *cfile )
 {
 	char *p;
-	int ret;
+	uint ret;
 
-	ret = strtol (cfile->val, &p, 10);
+	ret = strtoul( cfile->val, &p, 10 );
 	if (*p == 'k' || *p == 'K')
 		ret *= 1024, p++;
 	else if (*p == 'm' || *p == 'M')
@@ -319,7 +319,8 @@ load_config( const char *where, int pseudo )
 	group_conf_t *group, **groupapp = &groups;
 	string_list_t *chanlist, **chanlistapp;
 	char *arg, *p;
-	int len, cops, gcops, max_size, ms, i;
+	uint len, max_size;
+	int cops, gcops, ms, i;
 	char path[_POSIX_PATH_MAX];
 	char buf[1024];
 
@@ -354,7 +355,7 @@ load_config( const char *where, int pseudo )
 			if (drivers[i]->parse_store( &cfile, &store )) {
 				if (store) {
 					if (!store->max_size)
-						store->max_size = INT_MAX;
+						store->max_size = UINT_MAX;
 					if (!store->flat_delim)
 						store->flat_delim = "";
 					*storeapp = store;
@@ -371,7 +372,7 @@ load_config( const char *where, int pseudo )
 			channel->expire_unread = global_conf.expire_unread;
 			channel->use_internal_date = global_conf.use_internal_date;
 			cops = 0;
-			max_size = -1;
+			max_size = UINT_MAX;
 			while (getcline( &cfile ) && cfile.cmd) {
 				if (!strcasecmp( "MaxSize", cfile.cmd ))
 					max_size = parse_size( &cfile );
@@ -422,9 +423,9 @@ load_config( const char *where, int pseudo )
 			} else if (merge_ops( cops, channel->ops ))
 				cfile.err = 1;
 			else {
-				if (max_size >= 0) {
+				if (max_size != UINT_MAX) {
 					if (!max_size)
-						max_size = INT_MAX;
+						max_size = UINT_MAX;
 					channel->stores[M]->max_size = channel->stores[S]->max_size = max_size;
 				}
 				*channelapp = channel;
@@ -487,8 +488,8 @@ load_config( const char *where, int pseudo )
 		else if (!strcasecmp( "BufferLimit", cfile.cmd ))
 		{
 			BufferLimit = parse_size( &cfile );
-			if (BufferLimit <= 0) {
-				error( "%s:%d: BufferLimit must be positive\n", cfile.file, cfile.line );
+			if (!BufferLimit) {
+				error( "%s:%d: BufferLimit cannot be zero\n", cfile.file, cfile.line );
 				cfile.err = 1;
 			}
 		}
