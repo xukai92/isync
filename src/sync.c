@@ -1588,8 +1588,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			// in case of interruption - in particular skipping big messages would otherwise
 			// up the limit too early.
 			srec = tmsg->srec;
-			if (srec ? !srec->uid[t] &&
-			           (((srec->status & S_PENDING) && (svars->chan->ops[t] & OP_NEW)) ||
+			if (srec ? (((srec->status & S_PENDING) && (svars->chan->ops[t] & OP_NEW)) ||
 			            ((srec->status & S_SKIPPED) && (svars->chan->ops[t] & OP_RENEW)))
 			         : svars->newmaxuid[1-t] < tmsg->uid && (svars->chan->ops[t] & OP_NEW)) {
 				debug( "new message %u on %s\n", tmsg->uid, str_fn[1-t] );
