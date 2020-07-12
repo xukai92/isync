@@ -1657,10 +1657,15 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		for (tmsg = svars->msgs[N]; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
-			if ((srec = tmsg->srec) && srec->uid[F] &&
-			    ((tmsg->flags | srec->aflags[N]) & ~srec->dflags[N] & F_DELETED) &&
-			    !(srec->status & (S_EXPIRE|S_EXPIRED))) {
-				/* Message was not propagated yet, or is deleted. */
+			if (!(srec = tmsg->srec) || !srec->uid[F]) {
+				// The message was not propagated, so it doesn't count towards the total.
+				// Note that we also ignore messages we're currently propagating, which
+				// delays expiry of some messages by one cycle. Otherwise, we'd have to
+				// sequence flag propagation after message propagation to avoid a race
+				// with 3rd-party expunging, and that seems unreasonable.
+			} else if (((tmsg->flags | srec->aflags[N]) & ~srec->dflags[N] & F_DELETED) &&
+			           !(srec->status & (S_EXPIRE|S_EXPIRED))) {
+				// The paired message is being deleted.
 			} else {
 				alive++;
 			}
@@ -1678,7 +1683,6 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			if (!(srec = tmsg->srec) || !srec->uid[F]) {
 				/* We did not push the message, so it must be kept. */
 				debug( "  message %u unpropagated\n", tmsg->uid );
-				todel--;
 			} else {
 				nflags = (tmsg->flags | srec->aflags[N]) & ~srec->dflags[N];
 				if (!(nflags & F_DELETED) || (srec->status & (S_EXPIRE|S_EXPIRED))) {
