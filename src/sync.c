@@ -1671,6 +1671,8 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			}
 		}
 		for (tmsg = svars->msgs[F]; tmsg; tmsg = tmsg->next) {
+			if (tmsg->status & M_DEAD)
+				continue;
 			if ((srec = tmsg->srec) && (srec->status & S_PENDING) && !(tmsg->flags & F_DELETED))
 				alive++;
 		}
@@ -1705,6 +1707,8 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			}
 		}
 		for (tmsg = svars->msgs[F]; tmsg; tmsg = tmsg->next) {
+			if (tmsg->status & M_DEAD)
+				continue;
 			if ((srec = tmsg->srec) && (srec->status & S_PENDING)) {
 				nflags = tmsg->flags;
 				if (!(nflags & F_DELETED)) {
