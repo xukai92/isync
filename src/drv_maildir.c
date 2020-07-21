@@ -1670,13 +1670,6 @@ maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 }
 
 static void
-maildir_find_new_msgs( store_t *gctx ATTR_UNUSED, uint newuid ATTR_UNUSED,
-                       void (*cb)( int sts, message_t *msgs, void *aux ) ATTR_UNUSED, void *aux ATTR_UNUSED )
-{
-	assert( !"maildir_find_new_msgs is not supposed to be called" );
-}
-
-static void
 maildir_set_msg_flags( store_t *gctx, message_t *gmsg, uint uid ATTR_UNUSED, int add, int del,
                        void (*cb)( int sts, void *aux ), void *aux )
 {
@@ -1953,7 +1946,7 @@ struct driver maildir_driver = {
 	maildir_load_box,
 	maildir_fetch_msg,
 	maildir_store_msg,
-	maildir_find_new_msgs,
+	NULL,  // find_new_msgs
 	maildir_set_msg_flags,
 	maildir_trash_msg,
 	maildir_close_box,
