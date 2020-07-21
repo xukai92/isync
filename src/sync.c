@@ -1593,7 +1593,13 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			         : svars->newmaxuid[1-t] < tmsg->uid && (svars->chan->ops[t] & OP_NEW)) {
 				debug( "new message %u on %s\n", tmsg->uid, str_fn[1-t] );
 				if ((svars->chan->ops[t] & OP_EXPUNGE) && (tmsg->flags & F_DELETED)) {
-					debug( "-> ignoring - would be expunged anyway\n" );
+					if (srec) {
+						JLOG( "- %u %u", (srec->uid[F], srec->uid[N]), "killing - would be expunged anyway" );
+						tmsg->srec = NULL;
+						srec->status = S_DEAD;
+					} else {
+						debug( "-> ignoring - would be expunged anyway\n" );
+					}
 				} else {
 					if (srec) {
 						debug( "-> pair(%u,%u) exists\n", srec->uid[F], srec->uid[N] );
