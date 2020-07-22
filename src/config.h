@@ -32,6 +32,7 @@ typedef struct {
 	int bufl;
 	int line;
 	int err;
+	int ms_warn;
 	char *cmd, *val, *rest;
 } conffile_t;
 

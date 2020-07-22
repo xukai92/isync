@@ -37,9 +37,9 @@ sub test($$$@);
 
 ################################################################################
 
-# Format of the test defs: [ master, slave, state ]
-# master/slave: [ maxuid, { seq, uid, flags }... ]
-# state: [ MaxPulledUid, MaxExpiredMasterUid, MaxPushedUid, { muid, suid, flags }... ]
+# Format of the test defs: [ far, near, state ]
+# far/near: [ maxuid, { seq, uid, flags }... ]
+# state: [ MaxPulledUid, MaxExpiredFarUid, MaxPushedUid, { muid, suid, flags }... ]
 
 use enum qw(:=1 A..Z);
 sub mn($) { chr(64 + shift) }
@@ -78,7 +78,7 @@ my @X02 = (
 );
 test("full + expunge both", \@x01, \@X02, @O02);
 
-my @O03 = ("", "", "Expunge Slave\n");
+my @O03 = ("", "", "Expunge Near\n");
 #show("01", "03", "03");
 my @X03 = (
  [ 10,
@@ -88,7 +88,7 @@ my @X03 = (
  [ 9, 0, 9,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 5, 0, "T", 6, 0, "", 7, 0, "T", 10, 9, "", 9, 10, "" ],
 );
-test("full + expunge slave", \@x01, \@X03, @O03);
+test("full + expunge near side", \@x01, \@X03, @O03);
 
 my @O04 = ("", "", "Sync Pull\n");
 #show("01", "04", "04");
@@ -183,7 +183,7 @@ my @X22 = (
  [ 2, 0, 1,
    3, 1, "", 1, 2, "", 2, 0, "^" ],
 );
-test("slave max size", \@X11, \@X22, @O22);
+test("near side max size", \@X11, \@X22, @O22);
 
 # expiration tests
 
@@ -258,7 +258,7 @@ sub qm($)
 	return $_;
 }
 
-# $master, $slave, $channel
+# $far, $near, $channel
 sub writecfg($$$)
 {
 	open(FILE, ">", ".mbsyncrc") or
@@ -266,17 +266,17 @@ sub writecfg($$$)
 	print FILE
 "FSync no
 
-MaildirStore master
+MaildirStore far
 Path ./
-Inbox ./master
+Inbox ./far
 ".shift()."
-MaildirStore slave
+MaildirStore near
 Path ./
-Inbox ./slave
+Inbox ./near
 ".shift()."
 Channel test
-Master :master:
-Slave :slave:
+Far :far:
+Near :near:
 SyncState *
 ".shift();
 	close FILE;
@@ -371,8 +371,8 @@ sub showbox($)
 
 # $filename
 # Output:
-# [ maxuid[M], mmaxxuid, maxuid[S],
-#   uid[M], uid[S], "flags", ... ],
+# [ maxuid[F], maxxfuid, maxuid[N],
+#   uid[F], uid[N], "flags", ... ],
 sub showstate($)
 {
 	my ($fn) = @_;
@@ -400,7 +400,7 @@ sub showstate($)
 		return;
 	}
 	my @T = ($hdr{'MaxPulledUid'} // "missing",
-	         $hdr{'MaxExpiredMasterUid'} // "0",
+	         $hdr{'MaxExpiredFarUid'} // "0",
 	         $hdr{'MaxPushedUid'} // "missing");
 	for (@ls) {
 		/^(\d+) (\d+) (.*)$/;
@@ -414,8 +414,8 @@ sub showchan($)
 {
 	my ($fn) = @_;
 
-	showbox("master");
-	showbox("slave");
+	showbox("far");
+	showbox("near");
 	showstate($fn);
 }
 
@@ -428,17 +428,17 @@ sub show($$$)
 	eval "\@sfx = \@O$sfxn";
 	mkchan($sp[0], $sp[1], @{ $sp[2] });
 	print "my \@x$sx = (\n";
-	showchan("slave/.mbsyncstate");
+	showchan("near/.mbsyncstate");
 	print ");\n";
 	&writecfg(@sfx);
 	runsync("", "");
 	killcfg();
 	print "my \@X$tx = (\n";
-	showchan("slave/.mbsyncstate");
+	showchan("near/.mbsyncstate");
 	print ");\n";
 	print "test(\"\", \\\@x$sx, \\\@X$tx, \@O$sfxn);\n\n";
-	rmtree "slave";
-	rmtree "master";
+	rmtree "near";
+	rmtree "far";
 }
 
 # $boxname, $maxuid, @msgs
@@ -462,16 +462,16 @@ sub mkbox($$@)
 	}
 }
 
-# \@master, \@slave, @syncstate
+# \@far, \@near, @syncstate
 sub mkchan($$@)
 {
 	my ($m, $s, @t) = @_;
-	&mkbox("master", @{ $m });
-	&mkbox("slave", @{ $s });
-	open(FILE, ">", "slave/.mbsyncstate") or
+	&mkbox("far", @{ $m });
+	&mkbox("near", @{ $s });
+	open(FILE, ">", "near/.mbsyncstate") or
 		die "Cannot create sync state.\n";
-	print FILE "MasterUidValidity 1\nMaxPulledUid ".shift(@t)."\n".
-	           "SlaveUidValidity 1\nMaxExpiredMasterUid ".shift(@t)."\nMaxPushedUid ".shift(@t)."\n\n";
+	print FILE "FarUidValidity 1\nMaxPulledUid ".shift(@t)."\n".
+	           "NearUidValidity 1\nMaxExpiredFarUid ".shift(@t)."\nMaxPushedUid ".shift(@t)."\n\n";
 	while (@t) {
 		print FILE shift(@t)." ".shift(@t)." ".shift(@t)."\n";
 	}
@@ -514,13 +514,13 @@ sub ckbox($$@)
 # $filename, @syncstate
 sub ckstate($@)
 {
-	my ($fn, $mmaxuid, $mmaxxuid, $smaxuid, @T) = @_;
+	my ($fn, $fmaxuid, $maxxfuid, $nmaxuid, @T) = @_;
 	my %hdr;
-	$hdr{'MasterUidValidity'} = "1";
-	$hdr{'SlaveUidValidity'} = "1";
-	$hdr{'MaxPulledUid'} = $mmaxuid;
-	$hdr{'MaxPushedUid'} = $smaxuid;
-	$hdr{'MaxExpiredMasterUid'} = $mmaxxuid if ($mmaxxuid ne 0);
+	$hdr{'FarUidValidity'} = "1";
+	$hdr{'NearUidValidity'} = "1";
+	$hdr{'MaxPulledUid'} = $fmaxuid;
+	$hdr{'MaxPushedUid'} = $nmaxuid;
+	$hdr{'MaxExpiredFarUid'} = $maxxfuid if ($maxxfuid ne 0);
 	open(FILE, "<", $fn) or die "Cannot read sync state $fn.\n";
 	chomp(my @ls = <FILE>);
 	close FILE;
@@ -573,8 +573,8 @@ sub ckchan($$)
 {
 	my ($F, $cs) = @_;
 	my $rslt = ckstate($F, @{ $$cs[2] });
-	$rslt |= &ckbox("master", @{ $$cs[0] });
-	$rslt |= &ckbox("slave", @{ $$cs[1] });
+	$rslt |= &ckbox("far", @{ $$cs[0] });
+	$rslt |= &ckbox("near", @{ $$cs[1] });
 	return $rslt;
 }
 
@@ -618,8 +618,8 @@ sub printchan($)
 {
 	my ($cs) = @_;
 
-	&printbox("master", @{ $$cs[0] });
-	&printbox("slave", @{ $$cs[1] });
+	&printbox("far", @{ $$cs[0] });
+	&printbox("near", @{ $$cs[1] });
 	printstate(@{ $$cs[2] });
 }
 
@@ -645,7 +645,7 @@ sub test($$$@)
 	mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 
 	my ($xc, @ret) = runsync("-J", "1-initial.log");
-	if ($xc || ckchan("slave/.mbsyncstate.new", $tx)) {
+	if ($xc || ckchan("near/.mbsyncstate.new", $tx)) {
 		print "Input:\n";
 		printchan($sx);
 		print "Options:\n";
@@ -654,16 +654,16 @@ sub test($$$@)
 			print "Expected result:\n";
 			printchan($tx);
 			print "Actual result:\n";
-			showchan("slave/.mbsyncstate.new");
+			showchan("near/.mbsyncstate.new");
 		}
 		print "Debug output:\n";
 		print @ret;
 		exit 1;
 	}
 
-	my @nj = readfile("slave/.mbsyncstate.journal");
+	my @nj = readfile("near/.mbsyncstate.journal");
 	my ($jxc, @jret) = runsync("-0 --no-expunge", "2-replay.log");
-	if ($jxc || ckstate("slave/.mbsyncstate", @{ $$tx[2] })) {
+	if ($jxc || ckstate("near/.mbsyncstate", @{ $$tx[2] })) {
 		print "Journal replay failed.\n";
 		print "Options:\n";
 		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ], [ \"-0\", \"--no-expunge\" ]\n";
@@ -674,7 +674,7 @@ sub test($$$@)
 			print "Expected New State:\n";
 			printstate(@{ $$tx[2] });
 			print "New State:\n";
-			showstate("slave/.mbsyncstate");
+			showstate("near/.mbsyncstate");
 		}
 		print "Debug output:\n";
 		print @jret;
@@ -682,7 +682,7 @@ sub test($$$@)
 	}
 
 	my ($ixc, @iret) = runsync("", "3-verify.log");
-	if ($ixc || ckchan("slave/.mbsyncstate", $tx)) {
+	if ($ixc || ckchan("near/.mbsyncstate", $tx)) {
 		print "Idempotence verification run failed.\n";
 		print "Input == Expected result:\n";
 		printchan($tx);
@@ -690,15 +690,15 @@ sub test($$$@)
 		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
 		if (!$ixc) {
 			print "Actual result:\n";
-			showchan("slave/.mbsyncstate");
+			showchan("near/.mbsyncstate");
 		}
 		print "Debug output:\n";
 		print @iret;
 		exit 1;
 	}
 
-	rmtree "slave";
-	rmtree "master";
+	rmtree "near";
+	rmtree "far";
 
 	my $njl = (@nj - 1) * 2;
 	for (my $l = 2; $l < $njl; $l++) {
@@ -713,28 +713,28 @@ sub test($$$@)
 		}
 
 		($nxc, @nret) = runsync("-J", "5-resume.log");
-		if ($nxc || ckchan("slave/.mbsyncstate.new", $tx)) {
+		if ($nxc || ckchan("near/.mbsyncstate.new", $tx)) {
 			print "Resuming from step $l/$njl failed.\n";
 			print "Input:\n";
 			printchan($sx);
 			print "Options:\n";
 			print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
-			my @nnj = readfile("slave/.mbsyncstate.journal");
+			my @nnj = readfile("near/.mbsyncstate.journal");
 			print "Journal:\n".join("", @nnj[0..($l / 2 - 1)])."-------\n".join("", @nnj[($l / 2)..$#nnj])."\n";
 			print "Full journal:\n".join("", @nj)."\n";
 			if (!$nxc) {
 				print "Expected result:\n";
 				printchan($tx);
 				print "Actual result:\n";
-				showchan("slave/.mbsyncstate.new");
+				showchan("near/.mbsyncstate.new");
 			}
 			print "Debug output:\n";
 			print @nret;
 			exit 1;
 		}
 
-		rmtree "slave";
-		rmtree "master";
+		rmtree "near";
+		rmtree "far";
 	}
 
 	killcfg();

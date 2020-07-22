@@ -25,8 +25,8 @@
 
 #include "driver.h"
 
-#define M 0 /* master */
-#define S 1 /* slave */
+#define F 0  // far side
+#define N 1  // near side
 
 #define OP_NEW             (1<<0)
 #define OP_RENEW           (1<<1)
@@ -52,7 +52,7 @@ typedef struct channel_conf {
 	char *sync_state;
 	string_list_t *patterns;
 	int ops[2];
-	int max_messages; /* for slave only */
+	int max_messages;  // For near side only.
 	signed char expire_unread;
 	char use_internal_date;
 } channel_conf_t;
@@ -67,11 +67,11 @@ extern channel_conf_t global_conf;
 extern channel_conf_t *channels;
 extern group_conf_t *groups;
 
-extern const char *str_ms[2], *str_hl[2];
+extern const char *str_fn[2], *str_hl[2];
 
 #define SYNC_OK       0 /* assumed to be 0 */
 #define SYNC_FAIL     1
-#define SYNC_BAD(ms)  (4<<(ms))
+#define SYNC_BAD(fn)  (4<<(fn))
 #define SYNC_NOGOOD   16 /* internal */
 #define SYNC_CANCELED 32 /* internal */
 

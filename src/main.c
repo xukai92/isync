@@ -78,8 +78,8 @@ PACKAGE " " VERSION " - mailbox synchronizer\n"
 "  -d, --delete		propagate message deletions\n"
 "  -f, --flags		propagate message flag changes\n"
 "  -N, --renew		propagate previously not propagated new messages\n"
-"  -L, --pull		propagate from master to slave\n"
-"  -H, --push		propagate from slave to master\n"
+"  -L, --pull		propagate from far to near side\n"
+"  -H, --push		propagate from near to far side\n"
 "  -C, --create		propagate creations of mailboxes\n"
 "  -R, --remove		propagate deletions of mailboxes\n"
 "  -X, --expunge		expunge	deleted messages\n"
@@ -92,7 +92,7 @@ PACKAGE " " VERSION " - mailbox synchronizer\n"
 "\nIf neither --pull nor --push are specified, both are active.\n"
 "If neither --new, --delete, --flags nor --renew are specified, all are active.\n"
 "Direction and operation can be concatenated like --pull-new, etc.\n"
-"--create, --remove, and --expunge can be suffixed with -master/-slave.\n"
+"--create, --remove, and --expunge can be suffixed with -far/-near.\n"
 "See the man page for details.\n"
 "\nSupported mailbox formats are: IMAP4rev1, Maildir\n"
 "\nCompile time options:\n"
@@ -205,7 +205,7 @@ stats( void )
 		if (l > cls)
 			buf[t][cls - 1] = '~';
 	}
-	progress( "\r%s  M: %.*s  S: %.*s", buf[2], cls, buf[0], cls, buf[1] );
+	progress( "\r%s  F: %.*s  N: %.*s", buf[2], cls, buf[0], cls, buf[1] );
 }
 
 static int
@@ -297,18 +297,18 @@ filter_boxes( string_list_t *boxes, const char *prefix, string_list_t *patterns 
 static void
 merge_actions( channel_conf_t *chan, int ops[], int have, int mask, int def )
 {
-	if (ops[M] & have) {
-		chan->ops[M] &= ~mask;
-		chan->ops[M] |= ops[M] & mask;
-		chan->ops[S] &= ~mask;
-		chan->ops[S] |= ops[S] & mask;
-	} else if (!(chan->ops[M] & have)) {
-		if (global_conf.ops[M] & have) {
-			chan->ops[M] |= global_conf.ops[M] & mask;
-			chan->ops[S] |= global_conf.ops[S] & mask;
+	if (ops[F] & have) {
+		chan->ops[F] &= ~mask;
+		chan->ops[F] |= ops[F] & mask;
+		chan->ops[N] &= ~mask;
+		chan->ops[N] |= ops[N] & mask;
+	} else if (!(chan->ops[F] & have)) {
+		if (global_conf.ops[F] & have) {
+			chan->ops[F] |= global_conf.ops[F] & mask;
+			chan->ops[N] |= global_conf.ops[N] & mask;
 		} else {
-			chan->ops[M] |= def;
-			chan->ops[S] |= def;
+			chan->ops[F] |= def;
+			chan->ops[N] |= def;
 		}
 	}
 }
@@ -380,7 +380,7 @@ add_named_channel( chan_ent_t ***chanapp, char *channame, int ops[] )
 				mbox->name = nfstrndup( boxp, boxl );
 			else
 				mbox->name = nfstrndup( "INBOX", 5 );
-			mbox->present[M] = mbox->present[S] = BOX_POSSIBLE;
+			mbox->present[F] = mbox->present[N] = BOX_POSSIBLE;
 			mbox->next = NULL;
 			*mboxapp = mbox;
 			mboxapp = &mbox->next;
@@ -431,7 +431,7 @@ main( int argc, char **argv )
 	channel_conf_t *chan;
 	string_list_t *channame;
 	char *config = NULL, *opt, *ochar;
-	int oind, cops = 0, op, ops[2] = { 0, 0 }, pseudo = 0;
+	int oind, cops = 0, op, ops[2] = { 0, 0 }, pseudo = 0, ms_warn = 0;
 
 	tzset();
 	gethostname( Hostname, sizeof(Hostname) );
@@ -504,22 +504,26 @@ main( int argc, char **argv )
 						goto badopt;
 					DFlags |= op;
 				} else if (!strcmp( opt, "pull" ))
-					cops |= XOP_PULL, ops[M] |= XOP_HAVE_TYPE;
+					cops |= XOP_PULL, ops[F] |= XOP_HAVE_TYPE;
 				else if (!strcmp( opt, "push" ))
-					cops |= XOP_PUSH, ops[M] |= XOP_HAVE_TYPE;
+					cops |= XOP_PUSH, ops[F] |= XOP_HAVE_TYPE;
 				else if (starts_with( opt, -1, "create", 6 )) {
 					opt += 6;
 					op = OP_CREATE|XOP_HAVE_CREATE;
 				  lcop:
 					if (!*opt)
 						cops |= op;
-					else if (!strcmp( opt, "-master" ))
-						ops[M] |= op;
-					else if (!strcmp( opt, "-slave" ))
-						ops[S] |= op;
+					else if (!strcmp( opt, "-far" ))
+						ops[F] |= op;
+					else if (!strcmp( opt, "-master" ))  // Pre-1.4 legacy
+						ops[F] |= op, ms_warn = 1;
+					else if (!strcmp( opt, "-near" ))
+						ops[N] |= op;
+					else if (!strcmp( opt, "-slave" ))  // Pre-1.4 legacy
+						ops[N] |= op, ms_warn = 1;
 					else
 						goto badopt;
-					ops[M] |= op & (XOP_HAVE_CREATE|XOP_HAVE_REMOVE|XOP_HAVE_EXPUNGE);
+					ops[F] |= op & (XOP_HAVE_CREATE|XOP_HAVE_REMOVE|XOP_HAVE_EXPUNGE);
 				} else if (starts_with( opt, -1, "remove", 6 )) {
 					opt += 6;
 					op = OP_REMOVE|XOP_HAVE_REMOVE;
@@ -529,15 +533,15 @@ main( int argc, char **argv )
 					op = OP_EXPUNGE|XOP_HAVE_EXPUNGE;
 					goto lcop;
 				} else if (!strcmp( opt, "no-expunge" ))
-					ops[M] |= XOP_HAVE_EXPUNGE;
+					ops[F] |= XOP_HAVE_EXPUNGE;
 				else if (!strcmp( opt, "no-create" ))
-					ops[M] |= XOP_HAVE_CREATE;
+					ops[F] |= XOP_HAVE_CREATE;
 				else if (!strcmp( opt, "no-remove" ))
-					ops[M] |= XOP_HAVE_REMOVE;
+					ops[F] |= XOP_HAVE_REMOVE;
 				else if (!strcmp( opt, "full" ))
-					ops[M] |= XOP_HAVE_TYPE|XOP_PULL|XOP_PUSH;
+					ops[F] |= XOP_HAVE_TYPE|XOP_PULL|XOP_PUSH;
 				else if (!strcmp( opt, "noop" ))
-					ops[M] |= XOP_HAVE_TYPE;
+					ops[F] |= XOP_HAVE_TYPE;
 				else if (starts_with( opt, -1, "pull", 4 )) {
 					op = XOP_PULL;
 				  lcac:
@@ -569,11 +573,11 @@ main( int argc, char **argv )
 						return 1;
 					}
 					switch (op & XOP_MASK_DIR) {
-					case XOP_PULL: ops[S] |= op & OP_MASK_TYPE; break;
-					case XOP_PUSH: ops[M] |= op & OP_MASK_TYPE; break;
+					case XOP_PULL: ops[N] |= op & OP_MASK_TYPE; break;
+					case XOP_PUSH: ops[F] |= op & OP_MASK_TYPE; break;
 					default: cops |= op; break;
 					}
-					ops[M] |= XOP_HAVE_TYPE;
+					ops[F] |= XOP_HAVE_TYPE;
 				}
 				continue;
 			}
@@ -604,15 +608,19 @@ main( int argc, char **argv )
 		case 'C':
 			op = OP_CREATE|XOP_HAVE_CREATE;
 		  cop:
-			if (*ochar == 'm')
-				ops[M] |= op, ochar++;
-			else if (*ochar == 's')
-				ops[S] |= op, ochar++;
+			if (*ochar == 'f')
+				ops[F] |= op, ochar++;
+			else if (*ochar == 'm')  // Pre-1.4 legacy
+				ops[F] |= op, ms_warn = 1, ochar++;
+			else if (*ochar == 'n')
+				ops[N] |= op, ochar++;
+			else if (*ochar == 's')  // Pre-1.4 legacy
+				ops[N] |= op, ms_warn = 1, ochar++;
 			else if (*ochar == '-')
 				ochar++;
 			else
 				cops |= op;
-			ops[M] |= op & (XOP_HAVE_CREATE|XOP_HAVE_REMOVE|XOP_HAVE_EXPUNGE);
+			ops[F] |= op & (XOP_HAVE_CREATE|XOP_HAVE_REMOVE|XOP_HAVE_EXPUNGE);
 			break;
 		case 'R':
 			op = OP_REMOVE|XOP_HAVE_REMOVE;
@@ -624,7 +632,7 @@ main( int argc, char **argv )
 			cops |= XOP_PULL|XOP_PUSH;
 			FALLTHROUGH
 		case '0':
-			ops[M] |= XOP_HAVE_TYPE;
+			ops[F] |= XOP_HAVE_TYPE;
 			break;
 		case 'n':
 		case 'd':
@@ -647,13 +655,13 @@ main( int argc, char **argv )
 			}
 			if (op & OP_MASK_TYPE)
 				switch (op & XOP_MASK_DIR) {
-				case XOP_PULL: ops[S] |= op & OP_MASK_TYPE; break;
-				case XOP_PUSH: ops[M] |= op & OP_MASK_TYPE; break;
+				case XOP_PULL: ops[N] |= op & OP_MASK_TYPE; break;
+				case XOP_PUSH: ops[F] |= op & OP_MASK_TYPE; break;
 				default: cops |= op; break;
 				}
 			else
 				cops |= op;
-			ops[M] |= XOP_HAVE_TYPE;
+			ops[F] |= XOP_HAVE_TYPE;
 			break;
 		case 'L':
 			op = XOP_PULL;
@@ -722,6 +730,8 @@ main( int argc, char **argv )
 			return 1;
 		}
 	}
+	if (ms_warn)
+		warn( "Notice: -master/-slave/m/s suffixes are deprecated; use -far/-near/f/n instead.\n" );
 
 	if (!(DFlags & (QUIET | DEBUG_ALL)) && isatty( 1 ))
 		DFlags |= PROGRESS;
@@ -839,17 +849,17 @@ sync_chans( main_vars_t *mvars, int ent )
 			int st = mvars->chan->stores[t]->driver->get_fail_state( mvars->chan->stores[t] );
 			if (st != FAIL_TEMP) {
 				info( "Skipping due to %sfailed %s store %s.\n",
-				      (st == FAIL_WAIT) ? "temporarily " : "", str_ms[t], mvars->chan->stores[t]->name );
+				      (st == FAIL_WAIT) ? "temporarily " : "", str_fn[t], mvars->chan->stores[t]->name );
 				mvars->skip = 1;
 			}
 		}
 		if (mvars->skip)
 			goto next2;
-		mvars->state[M] = mvars->state[S] = ST_FRESH;
-		if ((DFlags & DEBUG_DRV) || (mvars->chan->stores[M]->driver->get_caps( NULL ) & mvars->chan->stores[S]->driver->get_caps( NULL ) & DRV_VERBOSE))
-			labels[M] = "M: ", labels[S] = "S: ";
+		mvars->state[F] = mvars->state[N] = ST_FRESH;
+		if ((DFlags & DEBUG_DRV) || (mvars->chan->stores[F]->driver->get_caps( NULL ) & mvars->chan->stores[N]->driver->get_caps( NULL ) & DRV_VERBOSE))
+			labels[F] = "F: ", labels[N] = "N: ";
 		else
-			labels[M] = labels[S] = "";
+			labels[F] = labels[N] = "";
 		for (t = 0; t < 2; t++) {
 			driver_t *drv = mvars->chan->stores[t]->driver;
 			store_t *ctx = drv->alloc_store( mvars->chan->stores[t], labels[t] );
@@ -862,7 +872,7 @@ sync_chans( main_vars_t *mvars, int ent )
 			drv->set_bad_callback( ctx, store_bad, AUX );
 		}
 		for (t = 0; ; t++) {
-			info( "Opening %s store %s...\n", str_ms[t], mvars->chan->stores[t]->name );
+			info( "Opening %s store %s...\n", str_fn[t], mvars->chan->stores[t]->name );
 			mvars->drv[t]->connect_store( mvars->ctx[t], store_connected, AUX );
 			if (t || mvars->skip)
 				break;
@@ -872,35 +882,35 @@ sync_chans( main_vars_t *mvars, int ent )
 	  opened:
 		if (mvars->skip)
 			goto next;
-		if (mvars->state[M] != ST_OPEN || mvars->state[S] != ST_OPEN)
+		if (mvars->state[F] != ST_OPEN || mvars->state[N] != ST_OPEN)
 			return;
 
 		if (!mvars->chanptr->boxlist && mvars->chan->patterns) {
 			mvars->chanptr->boxlist = 2;
-			boxes[M] = filter_boxes( mvars->boxes[M], mvars->chan->boxes[M], mvars->chan->patterns );
-			boxes[S] = filter_boxes( mvars->boxes[S], mvars->chan->boxes[S], mvars->chan->patterns );
+			boxes[F] = filter_boxes( mvars->boxes[F], mvars->chan->boxes[F], mvars->chan->patterns );
+			boxes[N] = filter_boxes( mvars->boxes[N], mvars->chan->boxes[N], mvars->chan->patterns );
 			mboxapp = &mvars->chanptr->boxes;
 			for (mb = sb = 0; ; ) {
-				char *mname = boxes[M] ? boxes[M][mb] : NULL;
-				char *sname = boxes[S] ? boxes[S][sb] : NULL;
+				char *mname = boxes[F] ? boxes[F][mb] : NULL;
+				char *sname = boxes[N] ? boxes[N][sb] : NULL;
 				if (!mname && !sname)
 					break;
 				mbox = nfmalloc( sizeof(*mbox) );
 				if (!(cmp = !mname - !sname) && !(cmp = cmp_box_names( &mname, &sname ))) {
 					mbox->name = mname;
 					free( sname );
-					mbox->present[M] = mbox->present[S] = BOX_PRESENT;
+					mbox->present[F] = mbox->present[N] = BOX_PRESENT;
 					mb++;
 					sb++;
 				} else if (cmp < 0) {
 					mbox->name = mname;
-					mbox->present[M] = BOX_PRESENT;
-					mbox->present[S] = (!mb && !strcmp( mbox->name, "INBOX" )) ? BOX_PRESENT : BOX_ABSENT;
+					mbox->present[F] = BOX_PRESENT;
+					mbox->present[N] = (!mb && !strcmp( mbox->name, "INBOX" )) ? BOX_PRESENT : BOX_ABSENT;
 					mb++;
 				} else {
 					mbox->name = sname;
-					mbox->present[M] = (!sb && !strcmp( mbox->name, "INBOX" )) ? BOX_PRESENT : BOX_ABSENT;
-					mbox->present[S] = BOX_PRESENT;
+					mbox->present[F] = (!sb && !strcmp( mbox->name, "INBOX" )) ? BOX_PRESENT : BOX_ABSENT;
+					mbox->present[N] = BOX_PRESENT;
 					sb++;
 				}
 				mbox->next = NULL;
@@ -908,8 +918,8 @@ sync_chans( main_vars_t *mvars, int ent )
 				mboxapp = &mbox->next;
 				boxes_total++;
 			}
-			free( boxes[M] );
-			free( boxes[S] );
+			free( boxes[F] );
+			free( boxes[N] );
 			if (!mvars->list)
 				stats();
 		}
@@ -938,7 +948,7 @@ sync_chans( main_vars_t *mvars, int ent )
 				if (!mvars->skip)
 					goto syncml;
 			} else
-				printf( "%s <=> %s\n", nz( mvars->chan->boxes[M], "INBOX" ), nz( mvars->chan->boxes[S], "INBOX" ) );
+				printf( "%s <=> %s\n", nz( mvars->chan->boxes[F], "INBOX" ), nz( mvars->chan->boxes[N], "INBOX" ) );
 		}
 
 	  next:
@@ -956,7 +966,7 @@ sync_chans( main_vars_t *mvars, int ent )
 			}
 		}
 		mvars->cben = 1;
-		if (mvars->state[M] != ST_CLOSED || mvars->state[S] != ST_CLOSED) {
+		if (mvars->state[F] != ST_CLOSED || mvars->state[N] != ST_CLOSED) {
 			mvars->skip = 1;
 			return;
 		}
@@ -1067,7 +1077,7 @@ store_listed( int sts, string_list_t *boxes, void *aux )
 			}
 		}
 		if (mvars->ctx[t]->conf->map_inbox) {
-			debug( "adding mapped inbox to %s: %s\n", str_ms[t], mvars->ctx[t]->conf->map_inbox );
+			debug( "adding mapped inbox to %s store: %s\n", str_fn[t], mvars->ctx[t]->conf->map_inbox );
 			add_string_list( &mvars->boxes[t], mvars->ctx[t]->conf->map_inbox );
 		}
 		break;
@@ -1082,19 +1092,19 @@ store_listed( int sts, string_list_t *boxes, void *aux )
 static int
 sync_listed_boxes( main_vars_t *mvars, box_ent_t *mbox )
 {
-	if (mvars->chan->boxes[M] || mvars->chan->boxes[S]) {
-		const char *mpfx = nz( mvars->chan->boxes[M], "" );
-		const char *spfx = nz( mvars->chan->boxes[S], "" );
+	if (mvars->chan->boxes[F] || mvars->chan->boxes[N]) {
+		const char *mpfx = nz( mvars->chan->boxes[F], "" );
+		const char *spfx = nz( mvars->chan->boxes[N], "" );
 		if (!mvars->list) {
-			nfasprintf( &mvars->names[M], "%s%s", mpfx, mbox->name );
-			nfasprintf( &mvars->names[S], "%s%s", spfx, mbox->name );
+			nfasprintf( &mvars->names[F], "%s%s", mpfx, mbox->name );
+			nfasprintf( &mvars->names[N], "%s%s", spfx, mbox->name );
 			sync_boxes( mvars->ctx, (const char * const *)mvars->names, mbox->present, mvars->chan, done_sync_2_dyn, mvars );
 			return 1;
 		}
 		printf( "%s%s <=> %s%s\n", mpfx, mbox->name, spfx, mbox->name );
 	} else {
 		if (!mvars->list) {
-			mvars->names[M] = mvars->names[S] = mbox->name;
+			mvars->names[F] = mvars->names[N] = mbox->name;
 			sync_boxes( mvars->ctx, (const char * const *)mvars->names, mbox->present, mvars->chan, done_sync, mvars );
 			return 1;
 		}
@@ -1108,8 +1118,8 @@ done_sync_2_dyn( int sts, void *aux )
 {
 	main_vars_t *mvars = (main_vars_t *)aux;
 
-	free( mvars->names[M] );
-	free( mvars->names[S] );
+	free( mvars->names[F] );
+	free( mvars->names[N] );
 	done_sync( sts, aux );
 }
 
@@ -1123,11 +1133,11 @@ done_sync( int sts, void *aux )
 	stats();
 	if (sts) {
 		mvars->ret = 1;
-		if (sts & (SYNC_BAD(M) | SYNC_BAD(S))) {
-			if (sts & SYNC_BAD(M))
-				mvars->state[M] = ST_CLOSED;
-			if (sts & SYNC_BAD(S))
-				mvars->state[S] = ST_CLOSED;
+		if (sts & (SYNC_BAD(F) | SYNC_BAD(N))) {
+			if (sts & SYNC_BAD(F))
+				mvars->state[F] = ST_CLOSED;
+			if (sts & SYNC_BAD(N))
+				mvars->state[N] = ST_CLOSED;
 			mvars->skip = 1;
 		}
 	}

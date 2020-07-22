@@ -15,7 +15,7 @@ should complain when multiple Channels match the same folders.
 propagate folder deletions even when the folders are non-empty.
 - verify that "most" of the folders in the Channel are still there.
 - refuse to delete unpropagated messages when trashing on the remote side.
-- refuse to delete master if it has unpropagated messages. symmetry?
+- refuse to delete far side if it has unpropagated messages. symmetry?
 
 add message expiration based on arrival date (message date would be too
 unreliable). MaxAge; probably mutually exclusive to MaxMessages.
@@ -28,9 +28,9 @@ add support for event notification callbacks.
 it would be also possible to report more differentiated exit codes, but
 that seems too limiting in the general case.
 
-make it possible to have different mailbox names for Master and Slave in
+make it possible to have different mailbox names for far and near side in
 Patterns.
-- use master:slave for the pattern
+- use far:near for the pattern
   - for quoting, use more colons: the longest sequence of colons is the
     separator
 - this makes Groups mostly useless, as they are mostly a workaround for this
@@ -63,7 +63,7 @@ use MULTIAPPEND and FETCH with multiple messages.
 
 create dummies describing MIME structure of messages bigger than MaxSize.
 flagging the dummy would fetch the real message. possibly remove --renew.
-note that all interaction needs to happen on the slave side probably.
+note that all interaction needs to happen on the near side probably.
 
 don't SELECT boxes unless really needed; in particular not for appending,
 and in write-only mode not before changes are made.

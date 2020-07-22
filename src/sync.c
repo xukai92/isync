@@ -43,7 +43,7 @@ channel_conf_t global_conf;
 channel_conf_t *channels;
 group_conf_t *groups;
 
-const char *str_ms[] = { "master", "slave" }, *str_hl[] = { "push", "pull" };
+const char *str_fn[] = { "far side", "near side" }, *str_hl[] = { "push", "pull" };
 
 static void ATTR_PRINTFLIKE(1, 2)
 debug( const char *msg, ... )
@@ -131,8 +131,8 @@ make_flags( uchar flags, char *buf )
 // These is the (mostly) persistent status of the sync record.
 // Most of these bits are actually mutually exclusive. It is a
 // bitfield to allow for easy testing for multiple states.
-#define S_EXPIRE       (1<<0)  // the entry is being expired (slave message removal scheduled)
-#define S_EXPIRED      (1<<1)  // the entry is expired (slave message removal confirmed)
+#define S_EXPIRE       (1<<0)  // the entry is being expired (near side message removal scheduled)
+#define S_EXPIRED      (1<<1)  // the entry is expired (near side message removal confirmed)
 #define S_PENDING      (1<<2)  // the entry is new and awaits propagation (possibly a retry)
 #define S_SKIPPED      (1<<3)  // the entry was not propagated (message is too big)
 #define S_DEAD         (1<<7)  // ephemeral: the entry was killed and should be ignored
@@ -140,7 +140,7 @@ make_flags( uchar flags, char *buf )
 // Ephemeral working set.
 #define W_NEXPIRE      (1<<0)  // temporary: new expiration state
 #define W_DELETE       (1<<1)  // ephemeral: flags propagation is a deletion
-#define W_DEL(ms)      (1<<(2+(ms)))  // ephemeral: m/s message would be subject to expunge
+#define W_DEL(fn)      (1<<(2+(fn)))  // ephemeral: f/n message would be subject to expunge
 
 typedef struct sync_rec {
 	struct sync_rec *next;
@@ -171,7 +171,7 @@ typedef struct {
 	uint uidval[2];     // UID validity value
 	uint newuidval[2];  // UID validity obtained from driver
 	uint newuid[2];     // TUID lookup makes sense only for UIDs >= this
-	uint mmaxxuid;      // highest expired UID on master
+	uint maxxfuid;      // highest expired UID on far side
 	uchar good_flags[2], bad_flags[2];
 } sync_vars_t;
 
@@ -194,11 +194,11 @@ static int check_cancel( sync_vars_t *svars );
 /* operation dependencies:
    select(x): -
    load(x): select(x)
-   new(M), new(S), flags(M), flags(S): load(M) & load(S)
+   new(F), new(N), flags(F), flags(N): load(F) & load(N)
    find_new(x): new(x)
    trash(x): flags(x)
    close(x): trash(x) & find_new(x) & new(!x) // with expunge
-   cleanup: close(M) & close(S)
+   cleanup: close(F) & close(N)
 */
 
 #define ST_LOADED          (1<<0)
@@ -257,7 +257,7 @@ match_tuids( sync_vars_t *svars, int t, message_t *msgs )
 		if (srec->status & S_DEAD)
 			continue;
 		if (!srec->uid[t] && srec->tuid[0]) {
-			debug( "pair(%u,%u) TUID %." stringify(TUIDL) "s\n", srec->uid[M], srec->uid[S], srec->tuid );
+			debug( "pair(%u,%u) TUID %." stringify(TUIDL) "s\n", srec->uid[F], srec->uid[N], srec->tuid );
 			for (tmsg = ntmsg; tmsg; tmsg = tmsg->next) {
 				if (tmsg->status & M_DEAD)
 					continue;
@@ -274,13 +274,13 @@ match_tuids( sync_vars_t *svars, int t, message_t *msgs )
 					goto mfound;
 				}
 			}
-			JLOG( "& %u %u", (srec->uid[M], srec->uid[S]), "TUID lost" );
+			JLOG( "& %u %u", (srec->uid[F], srec->uid[N]), "TUID lost" );
 			// Note: status remains S_PENDING.
 			srec->tuid[0] = 0;
 			num_lost++;
 			continue;
 		  mfound:
-			JLOG( "%c %u %u %u", ("<>"[t], srec->uid[M], srec->uid[S], tmsg->uid), "TUID matched %s", diag );
+			JLOG( "%c %u %u %u", ("<>"[t], srec->uid[F], srec->uid[N], tmsg->uid), "TUID matched %s", diag );
 			tmsg->srec = srec;
 			srec->msg[t] = tmsg;
 			ntmsg = tmsg->next;
@@ -304,7 +304,7 @@ sanitize_flags( uchar tflags, sync_vars_t *svars, int t )
 		if (bflags) {
 			char bfbuf[16];
 			make_flags( bflags, bfbuf );
-			notice( "Notice: %s does not support flag(s) '%s'; not propagating.\n", str_ms[t], bfbuf );
+			notice( "Notice: %s store does not support flag(s) '%s'; not propagating.\n", str_fn[t], bfbuf );
 			svars->bad_flags[t] |= bflags;
 		}
 	}
@@ -458,7 +458,7 @@ msg_fetched( int sts, void *aux )
 		if (vars->srec || scr != tcr) {
 			if (!copy_msg_convert( scr, tcr, vars )) {
 				warn( "Warning: message %u from %s has incomplete header.\n",
-				      vars->msg->uid, str_ms[1-t] );
+				      vars->msg->uid, str_fn[1-t] );
 				vars->cb( SYNC_NOGOOD, 0, vars );
 				return;
 			}
@@ -495,7 +495,7 @@ msg_stored( int sts, uint uid, void *aux )
 		INIT_SVARS(vars->aux);
 		(void)svars;
 		warn( "Warning: %s refuses to store message %u from %s.\n",
-		      str_ms[t], vars->msg->uid, str_ms[1-t] );
+		      str_fn[t], vars->msg->uid, str_fn[1-t] );
 		vars->cb( SYNC_NOGOOD, 0, vars );
 		break;
 	default:
@@ -557,7 +557,7 @@ store_bad( void *aux )
 static int
 check_cancel( sync_vars_t *svars )
 {
-	return (svars->state[M] | svars->state[S]) & (ST_SENT_CANCEL | ST_CANCELED);
+	return (svars->state[F] | svars->state[N]) & (ST_SENT_CANCEL | ST_CANCELED);
 }
 
 static int
@@ -623,21 +623,21 @@ prepare_state( sync_vars_t *svars )
 
 	chan = svars->chan;
 	if (!strcmp( chan->sync_state ? chan->sync_state : global_conf.sync_state, "*" )) {
-		const char *path = svars->drv[S]->get_box_path( svars->ctx[S] );
+		const char *path = svars->drv[N]->get_box_path( svars->ctx[N] );
 		if (!path) {
-			error( "Error: store '%s' does not support in-box sync state\n", chan->stores[S]->name );
+			error( "Error: store '%s' does not support in-box sync state\n", chan->stores[N]->name );
 			return 0;
 		}
 		nfasprintf( &svars->dname, "%s/." EXE "state", path );
 	} else {
-		csname = clean_strdup( svars->box_name[S] );
+		csname = clean_strdup( svars->box_name[N] );
 		if (chan->sync_state)
 			nfasprintf( &svars->dname, "%s%s", chan->sync_state, csname );
 		else {
 			char c = FieldDelimiter;
-			cmname = clean_strdup( svars->box_name[M] );
+			cmname = clean_strdup( svars->box_name[F] );
 			nfasprintf( &svars->dname, "%s%c%s%c%s_%c%s%c%s", global_conf.sync_state,
-			            c, chan->stores[M]->name, c, cmname, c, chan->stores[S]->name, c, csname );
+			            c, chan->stores[F]->name, c, cmname, c, chan->stores[N]->name, c, csname );
 			free( cmname );
 		}
 		free( csname );
@@ -678,7 +678,7 @@ lock_state( sync_vars_t *svars )
 	}
 	if (fcntl( svars->lfd, F_SETLK, &lck )) {
 		error( "Error: channel :%s:%s-:%s:%s is locked\n",
-		       svars->chan->stores[M]->name, svars->orig_name[M], svars->chan->stores[S]->name, svars->orig_name[S] );
+		       svars->chan->stores[F]->name, svars->orig_name[F], svars->chan->stores[N]->name, svars->orig_name[N] );
 		close( svars->lfd );
 		svars->lfd = -1;
 		return 0;
@@ -693,16 +693,16 @@ save_state( sync_vars_t *svars )
 	char fbuf[16]; /* enlarge when support for keywords is added */
 
 	Fprintf( svars->nfp,
-	         "MasterUidValidity %u\nSlaveUidValidity %u\nMaxPulledUid %u\nMaxPushedUid %u\n",
-	         svars->uidval[M], svars->uidval[S], svars->maxuid[M], svars->maxuid[S] );
-	if (svars->mmaxxuid)
-		Fprintf( svars->nfp, "MaxExpiredMasterUid %u\n", svars->mmaxxuid );
+	         "FarUidValidity %u\nNearUidValidity %u\nMaxPulledUid %u\nMaxPushedUid %u\n",
+	         svars->uidval[F], svars->uidval[N], svars->maxuid[F], svars->maxuid[N] );
+	if (svars->maxxfuid)
+		Fprintf( svars->nfp, "MaxExpiredFarUid %u\n", svars->maxxfuid );
 	Fprintf( svars->nfp, "\n" );
 	for (srec = svars->srecs; srec; srec = srec->next) {
 		if (srec->status & S_DEAD)
 			continue;
 		make_flags( srec->flags, fbuf );
-		Fprintf( svars->nfp, "%u %u %s%s\n", srec->uid[M], srec->uid[S],
+		Fprintf( svars->nfp, "%u %u %s%s\n", srec->uid[F], srec->uid[N],
 		         (srec->status & S_SKIPPED) ? "^" : (srec->status & S_EXPIRED) ? "~" : "", fbuf );
 	}
 
@@ -724,7 +724,7 @@ load_state( sync_vars_t *svars )
 	char *s;
 	FILE *jfp;
 	uint ll;
-	uint smaxxuid = 0;
+	uint maxxnuid = 0;
 	char c;
 	struct stat st;
 	char fbuf[16]; /* enlarge when support for keywords is added */
@@ -747,8 +747,8 @@ load_state( sync_vars_t *svars )
 				goto gothdr;
 			if (line == 1 && isdigit( buf[0] )) {
 				if (sscanf( buf, "%63s %63s", buf1, buf2 ) != 2 ||
-				    sscanf( buf1, "%u:%u", &svars->uidval[M], &svars->maxuid[M] ) < 2 ||
-				    sscanf( buf2, "%u:%u:%u", &svars->uidval[S], &smaxxuid, &svars->maxuid[S] ) < 3) {
+				    sscanf( buf1, "%u:%u", &svars->uidval[F], &svars->maxuid[F] ) < 2 ||
+				    sscanf( buf2, "%u:%u:%u", &svars->uidval[N], &maxxnuid, &svars->maxuid[N] ) < 3) {
 					error( "Error: invalid sync state header in %s\n", svars->dname );
 					goto jbail;
 				}
@@ -759,18 +759,18 @@ load_state( sync_vars_t *svars )
 				error( "Error: malformed sync state header entry at %s:%d\n", svars->dname, line );
 				goto jbail;
 			}
-			if (!strcmp( buf1, "MasterUidValidity" ))
-				svars->uidval[M] = uid;
-			else if (!strcmp( buf1, "SlaveUidValidity" ))
-				svars->uidval[S] = uid;
+			if (!strcmp( buf1, "FarUidValidity" ) || !strcmp( buf1, "MasterUidValidity" ) /* Pre-1.4 legacy */)
+				svars->uidval[F] = uid;
+			else if (!strcmp( buf1, "NearUidValidity" ) || !strcmp( buf1, "SlaveUidValidity" ) /* Pre-1.4 legacy */)
+				svars->uidval[N] = uid;
 			else if (!strcmp( buf1, "MaxPulledUid" ))
-				svars->maxuid[M] = uid;
+				svars->maxuid[F] = uid;
 			else if (!strcmp( buf1, "MaxPushedUid" ))
-				svars->maxuid[S] = uid;
-			else if (!strcmp( buf1, "MaxExpiredMasterUid" ))
-				svars->mmaxxuid = uid;
+				svars->maxuid[N] = uid;
+			else if (!strcmp( buf1, "MaxExpiredFarUid" ) || !strcmp( buf1, "MaxExpiredMasterUid" ) /* Pre-1.4 legacy */)
+				svars->maxxfuid = uid;
 			else if (!strcmp( buf1, "MaxExpiredSlaveUid" ))  // Legacy
-				smaxxuid = uid;
+				maxxnuid = uid;
 			else {
 				error( "Error: unrecognized sync state header entry at %s:%d\n", svars->dname, line );
 				goto jbail;
@@ -793,8 +793,8 @@ load_state( sync_vars_t *svars )
 				goto jbail;
 			}
 			srec = nfcalloc( sizeof(*srec) );
-			srec->uid[M] = t1;
-			srec->uid[S] = t2;
+			srec->uid[F] = t1;
+			srec->uid[N] = t2;
 			s = fbuf;
 			if (*s == '^') {
 				s++;
@@ -802,15 +802,15 @@ load_state( sync_vars_t *svars )
 			} else if (*s == '~' || *s == 'X' /* Pre-1.3 legacy */) {
 				s++;
 				srec->status = S_EXPIRE | S_EXPIRED;
-			} else if (srec->uid[M] == (uint)-1) {  // Pre-1.3 legacy
-				srec->uid[M] = 0;
+			} else if (srec->uid[F] == (uint)-1) {  // Pre-1.3 legacy
+				srec->uid[F] = 0;
 				srec->status = S_SKIPPED;
-			} else if (srec->uid[S] == (uint)-1) {
-				srec->uid[S] = 0;
+			} else if (srec->uid[N] == (uint)-1) {
+				srec->uid[N] = 0;
 				srec->status = S_SKIPPED;
 			}
 			srec->flags = parse_flags( s );
-			debug( "  entry (%u,%u,%u,%s)\n", srec->uid[M], srec->uid[S], srec->flags,
+			debug( "  entry (%u,%u,%u,%s)\n", srec->uid[F], srec->uid[N], srec->flags,
 			       (srec->status & S_SKIPPED) ? "SKIP" : (srec->status & S_EXPIRED) ? "XPIRE" : "" );
 			*svars->srecadd = srec;
 			svars->srecadd = &srec->next;
@@ -827,34 +827,34 @@ load_state( sync_vars_t *svars )
 	}
 
 	// This is legacy support for pre-1.3 sync states.
-	if (smaxxuid) {
+	if (maxxnuid) {
 		uint minwuid = UINT_MAX;
 		for (srec = svars->srecs; srec; srec = srec->next) {
-			if ((srec->status & (S_DEAD | S_SKIPPED | S_PENDING)) || !srec->uid[M])
+			if ((srec->status & (S_DEAD | S_SKIPPED | S_PENDING)) || !srec->uid[F])
 				continue;
 			if (srec->status & S_EXPIRED) {
-				if (!srec->uid[S]) {
+				if (!srec->uid[N]) {
 					// The expired message was already gone.
 					continue;
 				}
 				// The expired message was not expunged yet, so re-examine it.
 				// This will happen en masse, so just extend the bulk fetch.
 			} else {
-				if (srec->uid[S] && smaxxuid >= srec->uid[S]) {
+				if (srec->uid[N] && maxxnuid >= srec->uid[N]) {
 					// The non-expired message is in the generally expired range,
 					// so don't make it contribute to the bulk fetch.
 					continue;
 				}
 				// Usual non-expired message.
 			}
-			if (minwuid > srec->uid[M])
-				minwuid = srec->uid[M];
+			if (minwuid > srec->uid[F])
+				minwuid = srec->uid[F];
 		}
-		svars->mmaxxuid = minwuid - 1;
+		svars->maxxfuid = minwuid - 1;
 	}
 
-	svars->newmaxuid[M] = svars->maxuid[M];
-	svars->newmaxuid[S] = svars->maxuid[S];
+	svars->newmaxuid[F] = svars->maxuid[F];
+	svars->newmaxuid[N] = svars->maxuid[N];
 	int line = 0;
 	if ((jfp = fopen( svars->jname, "r" ))) {
 		if (!lock_state( svars ))
@@ -900,18 +900,18 @@ load_state( sync_vars_t *svars )
 				else if (c == 'T')
 					*uint_array_append( &svars->trashed_msgs[t1] ) = t2;
 				else if (c == '!')
-					svars->mmaxxuid = t1;
+					svars->maxxfuid = t1;
 				else if (c == '|') {
-					svars->uidval[M] = t1;
-					svars->uidval[S] = t2;
+					svars->uidval[F] = t1;
+					svars->uidval[N] = t2;
 				} else if (c == '+') {
 					srec = nfcalloc( sizeof(*srec) );
-					srec->uid[M] = t1;
-					srec->uid[S] = t2;
-					if (svars->newmaxuid[M] < t1)
-						svars->newmaxuid[M] = t1;
-					if (svars->newmaxuid[S] < t2)
-						svars->newmaxuid[S] = t2;
+					srec->uid[F] = t1;
+					srec->uid[N] = t2;
+					if (svars->newmaxuid[F] < t1)
+						svars->newmaxuid[F] = t1;
+					if (svars->newmaxuid[N] < t2)
+						svars->newmaxuid[N] = t2;
 					debug( "  new entry(%u,%u)\n", t1, t2 );
 					srec->status = S_PENDING;
 					*svars->srecadd = srec;
@@ -919,15 +919,15 @@ load_state( sync_vars_t *svars )
 					svars->nsrecs++;
 				} else {
 					for (nsrec = srec; srec; srec = srec->next)
-						if (srec->uid[M] == t1 && srec->uid[S] == t2)
+						if (srec->uid[F] == t1 && srec->uid[N] == t2)
 							goto syncfnd;
 					for (srec = svars->srecs; srec != nsrec; srec = srec->next)
-						if (srec->uid[M] == t1 && srec->uid[S] == t2)
+						if (srec->uid[F] == t1 && srec->uid[N] == t2)
 							goto syncfnd;
 					error( "Error: journal entry at %s:%d refers to non-existing sync state entry\n", svars->jname, line );
 					goto jbail;
 				  syncfnd:
-					debugn( "  entry(%u,%u,%u) ", srec->uid[M], srec->uid[S], srec->flags );
+					debugn( "  entry(%u,%u,%u) ", srec->uid[F], srec->uid[N], srec->flags );
 					switch (c) {
 					case '-':
 						debug( "killed\n" );
@@ -935,7 +935,7 @@ load_state( sync_vars_t *svars )
 						break;
 					case '=':
 						debug( "aborted\n" );
-						svars->mmaxxuid = srec->uid[M];
+						svars->maxxfuid = srec->uid[F];
 						srec->status = S_DEAD;
 						break;
 					case '#':
@@ -947,14 +947,14 @@ load_state( sync_vars_t *svars )
 						srec->tuid[0] = 0;
 						break;
 					case '<':
-						debug( "master now %u\n", t3 );
-						srec->uid[M] = t3;
+						debug( "far side now %u\n", t3 );
+						srec->uid[F] = t3;
 						srec->status &= ~S_PENDING;
 						srec->tuid[0] = 0;
 						break;
 					case '>':
-						debug( "slave now %u\n", t3 );
-						srec->uid[S] = t3;
+						debug( "near side now %u\n", t3 );
+						srec->uid[N] = t3;
 						srec->status &= ~S_PENDING;
 						srec->tuid[0] = 0;
 						break;
@@ -1064,7 +1064,7 @@ sync_boxes( store_t *ctx[], const char * const names[], int present[], channel_c
 
 	sync_ref( svars );
 	for (t = 0; ; t++) {
-		info( "Opening %s box %s...\n", str_ms[t], svars->orig_name[t] );
+		info( "Opening %s box %s...\n", str_fn[t], svars->orig_name[t] );
 		if (present[t] == BOX_ABSENT)
 			box_confirmed2( svars, t );
 		else
@@ -1105,8 +1105,8 @@ box_confirmed2( sync_vars_t *svars, int t )
 		if (!(svars->state[t] & ST_PRESENT)) {
 			if (!(svars->state[1-t] & ST_PRESENT)) {
 				if (!svars->existing) {
-					error( "Error: channel %s: both master %s and slave %s cannot be opened.\n",
-					       svars->chan->name, svars->orig_name[M], svars->orig_name[S] );
+					error( "Error: channel %s: both far side %s and near side %s cannot be opened.\n",
+					       svars->chan->name, svars->orig_name[F], svars->orig_name[N] );
 				  bail:
 					svars->ret = SYNC_FAIL;
 				} else {
@@ -1122,22 +1122,22 @@ box_confirmed2( sync_vars_t *svars, int t )
 			}
 			if (svars->existing) {
 				if (!(svars->chan->ops[1-t] & OP_REMOVE)) {
-					error( "Error: channel %s: %s %s cannot be opened.\n",
-					       svars->chan->name, str_ms[t], svars->orig_name[t] );
+					error( "Error: channel %s: %s box %s cannot be opened.\n",
+					       svars->chan->name, str_fn[t], svars->orig_name[t] );
 					goto bail;
 				}
 				if (svars->drv[1-t]->confirm_box_empty( svars->ctx[1-t] ) != DRV_OK) {
-					warn( "Warning: channel %s: %s %s cannot be opened and %s %s not empty.\n",
-					      svars->chan->name, str_ms[t], svars->orig_name[t], str_ms[1-t], svars->orig_name[1-t] );
+					warn( "Warning: channel %s: %s box %s cannot be opened and %s box %s is not empty.\n",
+					      svars->chan->name, str_fn[t], svars->orig_name[t], str_fn[1-t], svars->orig_name[1-t] );
 					goto done;
 				}
-				info( "Deleting %s %s...\n", str_ms[1-t], svars->orig_name[1-t] );
+				info( "Deleting %s box %s...\n", str_fn[1-t], svars->orig_name[1-t] );
 				svars->drv[1-t]->delete_box( svars->ctx[1-t], box_deleted, INV_AUX );
 			} else {
 				if (!(svars->chan->ops[t] & OP_CREATE)) {
 					box_opened( DRV_BOX_BAD, UIDVAL_BAD, AUX );
 				} else {
-					info( "Creating %s %s...\n", str_ms[t], svars->orig_name[t] );
+					info( "Creating %s box %s...\n", str_fn[t], svars->orig_name[t] );
 					svars->drv[t]->create_box( svars->ctx[t], box_created, AUX );
 				}
 			}
@@ -1188,8 +1188,8 @@ box_opened( int sts, uint uidvalidity, void *aux )
 		return;
 
 	if (sts == DRV_BOX_BAD) {
-		error( "Error: channel %s: %s %s cannot be opened.\n",
-		       svars->chan->name, str_ms[t], svars->orig_name[t] );
+		error( "Error: channel %s: %s box %s cannot be opened.\n",
+		       svars->chan->name, str_fn[t], svars->orig_name[t] );
 		svars->ret = SYNC_FAIL;
 		sync_bail( svars );
 	} else {
@@ -1219,10 +1219,10 @@ box_opened2( sync_vars_t *svars, int t )
 		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != svars->newuidval[t])
 			fails++;
 	if (fails == 2) {
-		error( "Error: channel %s: UIDVALIDITY of both master and slave changed\n"
-		       "(master got %u, expected %u; slave got %u, expected %u).\n",
+		error( "Error: channel %s: UIDVALIDITY of both far and near side changed\n"
+		       "(far side got %u, expected %u; near side got %u, expected %u).\n",
 		       svars->chan->name,
-		       svars->newuidval[M], svars->uidval[M], svars->newuidval[S], svars->uidval[S] );
+		       svars->newuidval[F], svars->uidval[F], svars->newuidval[N], svars->uidval[N] );
 	  bail:
 		svars->ret = SYNC_FAIL;
 		sync_bail( svars );
@@ -1244,9 +1244,9 @@ box_opened2( sync_vars_t *svars, int t )
 	if (!svars->replayed)
 		jFprintf( svars, JOURNAL_VERSION "\n" );
 
-	opts[M] = opts[S] = 0;
+	opts[F] = opts[N] = 0;
 	if (fails)
-		opts[M] = opts[S] = OPEN_OLD|OPEN_OLD_IDS;
+		opts[F] = opts[N] = OPEN_OLD|OPEN_OLD_IDS;
 	for (t = 0; t < 2; t++) {
 		if (chan->ops[t] & (OP_DELETE|OP_FLAGS)) {
 			opts[t] |= OPEN_SETFLAGS;
@@ -1279,47 +1279,47 @@ box_opened2( sync_vars_t *svars, int t )
 				opts[t] |= OPEN_NEW|OPEN_FLAGS;
 		}
 	}
-	if ((chan->ops[S] & (OP_NEW|OP_RENEW|OP_FLAGS)) && chan->max_messages)
-		opts[S] |= OPEN_OLD|OPEN_NEW|OPEN_FLAGS;
+	if ((chan->ops[N] & (OP_NEW|OP_RENEW|OP_FLAGS)) && chan->max_messages)
+		opts[N] |= OPEN_OLD|OPEN_NEW|OPEN_FLAGS;
 	if (svars->replayed)
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
 			if (srec->tuid[0]) {
-				if (!srec->uid[M])
-					opts[M] |= OPEN_NEW|OPEN_FIND, svars->state[M] |= ST_FIND_OLD;
-				else if (!srec->uid[S])
-					opts[S] |= OPEN_NEW|OPEN_FIND, svars->state[S] |= ST_FIND_OLD;
+				if (!srec->uid[F])
+					opts[F] |= OPEN_NEW|OPEN_FIND, svars->state[F] |= ST_FIND_OLD;
+				else if (!srec->uid[N])
+					opts[N] |= OPEN_NEW|OPEN_FIND, svars->state[N] |= ST_FIND_OLD;
 				else
-					warn( "Warning: sync record (%u,%u) has stray TUID. Ignoring.\n", srec->uid[M], srec->uid[S] );
+					warn( "Warning: sync record (%u,%u) has stray TUID. Ignoring.\n", srec->uid[F], srec->uid[N] );
 			}
 		}
-	svars->opts[M] = svars->drv[M]->prepare_load_box( ctx[M], opts[M] );
-	svars->opts[S] = svars->drv[S]->prepare_load_box( ctx[S], opts[S] );
+	svars->opts[F] = svars->drv[F]->prepare_load_box( ctx[F], opts[F] );
+	svars->opts[N] = svars->drv[N]->prepare_load_box( ctx[N], opts[N] );
 
 	ARRAY_INIT( &mexcs );
-	if (svars->opts[M] & OPEN_OLD) {
+	if (svars->opts[F] & OPEN_OLD) {
 		if (chan->max_messages) {
-			/* When messages have been expired on the slave, the master fetch is split into
+			/* When messages have been expired on the near side, the far side fetch is split into
 			 * two ranges: The bulk fetch which corresponds with the most recent messages, and an
 			 * exception list of messages which would have been expired if they weren't important. */
-			debug( "preparing master selection - max expired master uid is %u\n", svars->mmaxxuid );
+			debug( "preparing far side selection - max expired far uid is %u\n", svars->maxxfuid );
 			/* First, find out the lower bound for the bulk fetch. */
-			minwuid = svars->mmaxxuid + 1;
+			minwuid = svars->maxxfuid + 1;
 			/* Next, calculate the exception fetch. */
 			for (srec = svars->srecs; srec; srec = srec->next) {
 				if (srec->status & S_DEAD)
 					continue;
-				if (!srec->uid[M])
+				if (!srec->uid[F])
 					continue;  // No message; other state is irrelevant
-				if (srec->uid[M] >= minwuid)
+				if (srec->uid[F] >= minwuid)
 					continue;  // Message is in non-expired range
-				if ((svars->opts[M] & OPEN_NEW) && srec->uid[M] >= svars->maxuid[M])
+				if ((svars->opts[F] & OPEN_NEW) && srec->uid[F] >= svars->maxuid[F])
 					continue;  // Message is in expired range, but new range overlaps that
-				if (!srec->uid[S] && !(srec->status & S_PENDING))
+				if (!srec->uid[N] && !(srec->status & S_PENDING))
 					continue;  // Only actually paired up messages matter
 				// The pair is alive, but outside the bulk range
-				*uint_array_append( &mexcs ) = srec->uid[M];
+				*uint_array_append( &mexcs ) = srec->uid[F];
 			}
 			sort_uint_array( mexcs.array );
 		} else {
@@ -1329,9 +1329,9 @@ box_opened2( sync_vars_t *svars, int t )
 		minwuid = UINT_MAX;
 	}
 	sync_ref( svars );
-	load_box( svars, M, minwuid, mexcs.array );
+	load_box( svars, F, minwuid, mexcs.array );
 	if (!check_cancel( svars ))
-		load_box( svars, S, (svars->opts[S] & OPEN_OLD) ? 1 : UINT_MAX, (uint_array_t){ NULL, 0 } );
+		load_box( svars, N, (svars->opts[N] & OPEN_OLD) ? 1 : UINT_MAX, (uint_array_t){ NULL, 0 } );
 	sync_deref( svars );
 }
 
@@ -1369,7 +1369,7 @@ load_box( sync_vars_t *svars, int t, uint minwuid, uint_array_t mexcs )
 		 * But if it is there, use it to avoid a possible gap in the fetched range. */
 		seenuid = svars->maxuid[t];
 	}
-	info( "Loading %s...\n", str_ms[t] );
+	info( "Loading %s box...\n", str_fn[t] );
 	svars->drv[t]->load_box( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], seenuid, mexcs, box_loaded, AUX );
 }
 
@@ -1407,14 +1407,14 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	INIT_SVARS(aux);
 	svars->state[t] |= ST_LOADED;
 	svars->msgs[t] = msgs;
-	info( "%s: %d messages, %d recent\n", str_ms[t], total_msgs, recent_msgs );
+	info( "%s: %d messages, %d recent\n", str_fn[t], total_msgs, recent_msgs );
 
 	if (svars->state[t] & ST_FIND_OLD) {
-		debug( "matching previously copied messages on %s\n", str_ms[t] );
+		debug( "matching previously copied messages on %s\n", str_fn[t] );
 		match_tuids( svars, t, msgs );
 	}
 
-	debug( "matching messages on %s against sync records\n", str_ms[t] );
+	debug( "matching messages on %s against sync records\n", str_fn[t] );
 	hashsz = bucketsForSize( svars->nsrecs * 3 );
 	srecmap = nfcalloc( hashsz * sizeof(*srecmap) );
 	for (srec = svars->srecs; srec; srec = srec->next) {
@@ -1456,7 +1456,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	for (t = 0; t < 2; t++) {
 		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != svars->newuidval[t]) {
 			unsigned need = 0, got = 0;
-			debug( "trying to re-approve uid validity of %s\n", str_ms[t] );
+			debug( "trying to re-approve uid validity of %s\n", str_fn[t] );
 			for (srec = svars->srecs; srec; srec = srec->next) {
 				if (srec->status & S_DEAD)
 					continue;
@@ -1467,9 +1467,9 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 					continue;  // Messages without ID are useless for re-validation.
 				if (!srec->msg[1-t])
 					continue;  // Partner disappeared.
-				if (!srec->msg[1-t]->msgid || strcmp( srec->msg[M]->msgid, srec->msg[S]->msgid )) {
-					error( "Error: channel %s, %s %s: UIDVALIDITY genuinely changed (at UID %u).\n",
-					       svars->chan->name, str_ms[t], svars->orig_name[t], srec->uid[t] );
+				if (!srec->msg[1-t]->msgid || strcmp( srec->msg[F]->msgid, srec->msg[N]->msgid )) {
+					error( "Error: channel %s, %s box %s: UIDVALIDITY genuinely changed (at UID %u).\n",
+					       svars->chan->name, str_fn[t], svars->orig_name[t], srec->uid[t] );
 				  uvchg:
 					svars->ret |= SYNC_FAIL;
 					cancel_sync( svars );
@@ -1482,22 +1482,22 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				// A proper fallback would be fetching more headers (which potentially need
 				// normalization) or the message body (which should be truncated for sanity)
 				// and comparing.
-				error( "Error: channel %s, %s %s: Unable to recover from UIDVALIDITY change\n"
+				error( "Error: channel %s, %s box %s: Unable to recover from UIDVALIDITY change\n"
 				       "(got %u, expected %u).\n",
-				       svars->chan->name, str_ms[t], svars->orig_name[t],
+				       svars->chan->name, str_fn[t], svars->orig_name[t],
 				       svars->newuidval[t], svars->uidval[t] );
 				goto uvchg;
 			}
-			notice( "Notice: channel %s, %s %s: Recovered from change of UIDVALIDITY.\n",
-			        svars->chan->name, str_ms[t], svars->orig_name[t] );
+			notice( "Notice: channel %s, %s box %s: Recovered from change of UIDVALIDITY.\n",
+			        svars->chan->name, str_fn[t], svars->orig_name[t] );
 			svars->uidval[t] = UIDVAL_BAD;
 		}
 	}
 
-	if (svars->uidval[M] == UIDVAL_BAD || svars->uidval[S] == UIDVAL_BAD) {
-		svars->uidval[M] = svars->newuidval[M];
-		svars->uidval[S] = svars->newuidval[S];
-		JLOG( "| %u %u", (svars->uidval[M], svars->uidval[S]), "new UIDVALIDITYs" );
+	if (svars->uidval[F] == UIDVAL_BAD || svars->uidval[N] == UIDVAL_BAD) {
+		svars->uidval[F] = svars->newuidval[F];
+		svars->uidval[N] = svars->newuidval[N];
+		JLOG( "| %u %u", (svars->uidval[F], svars->uidval[N]), "new UIDVALIDITYs" );
 	}
 
 	info( "Synchronizing...\n" );
@@ -1508,21 +1508,21 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	for (srec = svars->srecs; srec; srec = srec->next) {
 		if (srec->status & S_DEAD)
 			continue;
-		debug( "pair (%u,%u)\n", srec->uid[M], srec->uid[S] );
+		debug( "pair (%u,%u)\n", srec->uid[F], srec->uid[N] );
 		assert( !srec->tuid[0] );
 		// no[] means that a message is known to be not there.
-		no[M] = !srec->msg[M] && (svars->opts[M] & OPEN_OLD);
-		no[S] = !srec->msg[S] && (svars->opts[S] & OPEN_OLD);
-		if (no[M] && no[S]) {
+		no[F] = !srec->msg[F] && (svars->opts[F] & OPEN_OLD);
+		no[N] = !srec->msg[N] && (svars->opts[N] & OPEN_OLD);
+		if (no[F] && no[N]) {
 			// It does not matter whether one side was already known to be missing
 			// (never stored [skipped or failed] or expunged [possibly expired]) -
 			// now both are missing, so the entry is superfluous.
 			srec->status = S_DEAD;
-			JLOG( "- %u %u", (srec->uid[M], srec->uid[S]), "both missing" );
+			JLOG( "- %u %u", (srec->uid[F], srec->uid[N]), "both missing" );
 		} else {
 			// del[] means that a message becomes known to have been expunged.
-			del[M] = no[M] && srec->uid[M];
-			del[S] = no[S] && srec->uid[S];
+			del[F] = no[F] && srec->uid[F];
+			del[N] = no[N] && srec->uid[N];
 
 			for (t = 0; t < 2; t++) {
 				if (srec->msg[t] && (srec->msg[t]->flags & F_DELETED))
@@ -1538,13 +1538,13 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				} else if (del[1-t]) {
 					// The source was newly expunged, so possibly propagate the deletion.
 					// The target may be in an unknown state (not fetched).
-					if ((t == M) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
+					if ((t == F) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
 						/* Don't propagate deletion resulting from expiration. */
-						JLOG( "> %u %u 0", (srec->uid[M], srec->uid[S]), "slave expired, orphaning master" );
-						srec->uid[S] = 0;
+						JLOG( "> %u %u 0", (srec->uid[F], srec->uid[N]), "near side expired, orphaning far side" );
+						srec->uid[N] = 0;
 					} else {
 						if (srec->msg[t] && (srec->msg[t]->status & M_FLAGS) && srec->msg[t]->flags != srec->flags)
-							notice( "Notice: conflicting changes in (%u,%u)\n", srec->uid[M], srec->uid[S] );
+							notice( "Notice: conflicting changes in (%u,%u)\n", srec->uid[F], srec->uid[N] );
 						if (svars->chan->ops[t] & OP_DELETE) {
 							debug( "  %sing delete\n", str_hl[t] );
 							srec->aflags[t] = F_DELETED;
@@ -1556,14 +1556,14 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				} else if (!srec->msg[1-t]) {
 					// We have no source to work with, because it was never stored,
 					// it was previously expunged, or we did not fetch it.
-					debug( "  no %s\n", str_ms[1-t] );
+					debug( "  no %s\n", str_fn[1-t] );
 				} else {
 					// We have a source. The target may be in an unknown state.
 					if (svars->chan->ops[t] & OP_FLAGS) {
 						sflags = sanitize_flags( srec->msg[1-t]->flags, svars, t );
-						if ((t == M) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
+						if ((t == F) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
 							/* Don't propagate deletion resulting from expiration. */
-							debug( "  slave expiring\n" );
+							debug( "  near side expiring\n" );
 							sflags &= ~F_DELETED;
 						}
 						srec->aflags[t] = sflags & ~srec->flags;
@@ -1600,12 +1600,12 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			           (((srec->status & S_PENDING) && (svars->chan->ops[t] & OP_NEW)) ||
 			            ((srec->status & S_SKIPPED) && (svars->chan->ops[t] & OP_RENEW)))
 			         : svars->newmaxuid[1-t] < tmsg->uid && (svars->chan->ops[t] & OP_NEW)) {
-				debug( "new message %u on %s\n", tmsg->uid, str_ms[1-t] );
+				debug( "new message %u on %s\n", tmsg->uid, str_fn[1-t] );
 				if ((svars->chan->ops[t] & OP_EXPUNGE) && (tmsg->flags & F_DELETED)) {
 					debug( "-> ignoring - would be expunged anyway\n" );
 				} else {
 					if (srec) {
-						debug( "-> pair(%u,%u) exists\n", srec->uid[M], srec->uid[S] );
+						debug( "-> pair(%u,%u) exists\n", srec->uid[F], srec->uid[N] );
 					} else {
 						srec = nfcalloc( sizeof(*srec) );
 						*svars->srecadd = srec;
@@ -1617,19 +1617,19 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 						tmsg->srec = srec;
 						if (svars->newmaxuid[1-t] < tmsg->uid)
 							svars->newmaxuid[1-t] = tmsg->uid;
-						JLOG( "+ %u %u", (srec->uid[M], srec->uid[S]), "fresh" );
+						JLOG( "+ %u %u", (srec->uid[F], srec->uid[N]), "fresh" );
 					}
 					if ((tmsg->flags & F_FLAGGED) || tmsg->size <= svars->chan->stores[t]->max_size) {
 						if (srec->status != S_PENDING) {
 							srec->status = S_PENDING;
-							JLOG( "~ %u %u %u", (srec->uid[M], srec->uid[S], srec->status), "was too big" );
+							JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "was too big" );
 						}
 					} else {
 						if (srec->status == S_SKIPPED) {
 							debug( "-> still too big\n" );
 						} else {
 							srec->status = S_SKIPPED;
-							JLOG( "~ %u %u %u", (srec->uid[M], srec->uid[S], srec->status), "skipping - too big" );
+							JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "skipping - too big" );
 						}
 					}
 				}
@@ -1637,65 +1637,65 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		}
 	}
 
-	if ((svars->chan->ops[S] & (OP_NEW|OP_RENEW|OP_FLAGS)) && svars->chan->max_messages) {
-		/* Note: When this branch is entered, we have loaded all slave messages. */
+	if ((svars->chan->ops[N] & (OP_NEW|OP_RENEW|OP_FLAGS)) && svars->chan->max_messages) {
+		// Note: When this branch is entered, we have loaded all near side messages.
 		/* Expire excess messages. Important (flagged, unread, or unpropagated) messages
 		 * older than the first not expired message are not counted towards the total. */
 		debug( "preparing message expiration\n" );
 		alive = 0;
-		for (tmsg = svars->msgs[S]; tmsg; tmsg = tmsg->next) {
+		for (tmsg = svars->msgs[N]; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
-			if ((srec = tmsg->srec) && srec->uid[M] &&
-			    ((tmsg->flags | srec->aflags[S]) & ~srec->dflags[S] & F_DELETED) &&
+			if ((srec = tmsg->srec) && srec->uid[F] &&
+			    ((tmsg->flags | srec->aflags[N]) & ~srec->dflags[N] & F_DELETED) &&
 			    !(srec->status & (S_EXPIRE|S_EXPIRED))) {
 				/* Message was not propagated yet, or is deleted. */
 			} else {
 				alive++;
 			}
 		}
-		for (tmsg = svars->msgs[M]; tmsg; tmsg = tmsg->next) {
+		for (tmsg = svars->msgs[F]; tmsg; tmsg = tmsg->next) {
 			if ((srec = tmsg->srec) && (srec->status & S_PENDING) && !(tmsg->flags & F_DELETED))
 				alive++;
 		}
 		todel = alive - svars->chan->max_messages;
 		debug( "%d alive messages, %d excess - expiring\n", alive, todel );
 		alive = 0;
-		for (tmsg = svars->msgs[S]; tmsg; tmsg = tmsg->next) {
+		for (tmsg = svars->msgs[N]; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
-			if (!(srec = tmsg->srec) || !srec->uid[M]) {
+			if (!(srec = tmsg->srec) || !srec->uid[F]) {
 				/* We did not push the message, so it must be kept. */
 				debug( "  message %u unpropagated\n", tmsg->uid );
 				todel--;
 			} else {
-				nflags = (tmsg->flags | srec->aflags[S]) & ~srec->dflags[S];
+				nflags = (tmsg->flags | srec->aflags[N]) & ~srec->dflags[N];
 				if (!(nflags & F_DELETED) || (srec->status & (S_EXPIRE|S_EXPIRED))) {
 					/* The message is not deleted, or is already (being) expired. */
 					if ((nflags & F_FLAGGED) || !((nflags & F_SEEN) || ((void)(todel > 0 && alive++), svars->chan->expire_unread > 0))) {
 						/* Important messages are always kept. */
-						debug( "  old pair(%u,%u) important\n", srec->uid[M], srec->uid[S] );
+						debug( "  old pair(%u,%u) important\n", srec->uid[F], srec->uid[N] );
 						todel--;
 					} else if (todel > 0 ||
 					           ((srec->status & (S_EXPIRE|S_EXPIRED)) == (S_EXPIRE|S_EXPIRED)) ||
 					           ((srec->status & (S_EXPIRE|S_EXPIRED)) && (tmsg->flags & F_DELETED))) {
 						/* The message is excess or was already (being) expired. */
 						srec->wstate |= W_NEXPIRE;
-						debug( "  old pair(%u,%u) expired\n", srec->uid[M], srec->uid[S] );
-						if (svars->mmaxxuid < srec->uid[M])
-							svars->mmaxxuid = srec->uid[M];
+						debug( "  old pair(%u,%u) expired\n", srec->uid[F], srec->uid[N] );
+						if (svars->maxxfuid < srec->uid[F])
+							svars->maxxfuid = srec->uid[F];
 						todel--;
 					}
 				}
 			}
 		}
-		for (tmsg = svars->msgs[M]; tmsg; tmsg = tmsg->next) {
+		for (tmsg = svars->msgs[F]; tmsg; tmsg = tmsg->next) {
 			if ((srec = tmsg->srec) && (srec->status & S_PENDING)) {
 				nflags = tmsg->flags;
 				if (!(nflags & F_DELETED)) {
 					if ((nflags & F_FLAGGED) || !((nflags & F_SEEN) || ((void)(todel > 0 && alive++), svars->chan->expire_unread > 0))) {
 						/* Important messages are always fetched. */
-						debug( "  new pair(%u,%u) important\n", srec->uid[M], srec->uid[S] );
+						debug( "  new pair(%u,%u) important\n", srec->uid[F], srec->uid[N] );
 						todel--;
 					} else if (todel > 0) {
 						/* The message is excess. */
@@ -1709,7 +1709,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		if (svars->chan->expire_unread < 0 && alive * 2 > svars->chan->max_messages) {
 			error( "%s: %d unread messages in excess of MaxMessages (%d).\n"
 			       "Please set ExpireUnread to decide outcome. Skipping mailbox.\n",
-			       svars->orig_name[S], alive, svars->chan->max_messages );
+			       svars->orig_name[N], alive, svars->chan->max_messages );
 			svars->ret |= SYNC_FAIL;
 			cancel_sync( svars );
 			return;
@@ -1718,7 +1718,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			if (srec->status & S_DEAD)
 				continue;
 			if (!(srec->status & S_PENDING)) {
-				if (!srec->msg[S])
+				if (!srec->msg[N])
 					continue;
 				uchar nex = (srec->wstate / W_NEXPIRE) & 1;
 				if (nex != ((srec->status / S_EXPIRED) & 1)) {
@@ -1726,10 +1726,10 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 					if (nex != ((srec->status / S_EXPIRE) & 1)) {
 						/* ... and we need to start a transaction. */
 						srec->status = (srec->status & ~S_EXPIRE) | (nex * S_EXPIRE);
-						JLOG( "~ %u %u %u", (srec->uid[M], srec->uid[S], srec->status), "expire %u - begin", nex );
+						JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "expire %u - begin", nex );
 					} else {
 						/* ... but the "right" transaction is already pending. */
-						debug( "-> pair(%u,%u): expire %u (pending)\n", srec->uid[M], srec->uid[S], nex );
+						debug( "-> pair(%u,%u): expire %u (pending)\n", srec->uid[F], srec->uid[N], nex );
 					}
 				} else {
 					/* Note: the "wrong" transaction may be pending here,
@@ -1737,12 +1737,12 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				}
 			} else {
 				if (srec->wstate & W_NEXPIRE) {
-					JLOG( "= %u %u", (srec->uid[M], srec->uid[S]), "expire unborn" );
+					JLOG( "= %u %u", (srec->uid[F], srec->uid[N]), "expire unborn" );
 					// If we have so many new messages that some of them are instantly expired,
 					// but some are still propagated because they are important, we need to
 					// ensure explicitly that the bulk fetch limit is upped.
-					svars->mmaxxuid = srec->uid[M];
-					srec->msg[M]->srec = NULL;
+					svars->maxxfuid = srec->uid[F];
+					srec->msg[F]->srec = NULL;
 					srec->status = S_DEAD;
 				}
 			}
@@ -1753,7 +1753,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 
 	debug( "synchronizing flags\n" );
 	for (srec = svars->srecs; srec; srec = srec->next) {
-		if ((srec->status & S_DEAD) || !srec->uid[M] || !srec->uid[S])
+		if ((srec->status & S_DEAD) || !srec->uid[F] || !srec->uid[N])
 			continue;
 		for (t = 0; t < 2; t++) {
 			aflags = srec->aflags[t];
@@ -1765,7 +1765,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				}
 			} else {
 				/* The trigger is an expiration transaction being ongoing ... */
-				if ((t == S) && ((shifted_bit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
+				if ((t == N) && ((shifted_bit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
 					/* ... but the actual action derives from the wanted state. */
 					if (srec->wstate & W_NEXPIRE)
 						aflags |= F_DELETED;
@@ -1815,7 +1815,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		fdatasync( fileno( svars->jfp ) );
 	for (t = 0; t < 2; t++) {
 		svars->newuid[t] = svars->drv[t]->get_uidnext( svars->ctx[t] );
-		JLOG( "F %d %u", (t, svars->newuid[t]), "save UIDNEXT of %s", str_ms[t] );
+		JLOG( "F %d %u", (t, svars->newuid[t]), "save UIDNEXT of %s", str_fn[t] );
 		svars->new_msgs[t] = svars->msgs[1-t];
 		msgs_copied( svars, t );
 		if (check_cancel( svars ))
@@ -1835,12 +1835,12 @@ msg_copied( int sts, uint uid, copy_vars_t *vars )
 	case SYNC_OK:
 		if (vars->msg->flags != srec->flags) {
 			srec->flags = vars->msg->flags;
-			JLOG( "* %u %u %u", (srec->uid[M], srec->uid[S], srec->flags), "%sed with flags", str_hl[t] );
+			JLOG( "* %u %u %u", (srec->uid[F], srec->uid[N], srec->flags), "%sed with flags", str_hl[t] );
 		}
 		if (!uid) {  // Stored to a non-UIDPLUS mailbox
 			svars->state[t] |= ST_FIND_NEW;
 		} else {
-			JLOG( "%c %u %u %u", ("<>"[t], srec->uid[M], srec->uid[S], uid), "%sed message", str_hl[t] );
+			JLOG( "%c %u %u %u", ("<>"[t], srec->uid[F], srec->uid[N], uid), "%sed message", str_hl[t] );
 			vars->srec->uid[t] = uid;
 			vars->srec->status &= ~S_PENDING;
 			vars->srec->tuid[0] = 0;
@@ -1848,7 +1848,7 @@ msg_copied( int sts, uint uid, copy_vars_t *vars )
 		break;
 	case SYNC_NOGOOD:
 		srec->status = S_DEAD;
-		JLOG( "- %u %u", (srec->uid[M], srec->uid[S]), "%s failed", str_hl[t] );
+		JLOG( "- %u %u", (srec->uid[F], srec->uid[N]), "%s failed", str_hl[t] );
 		break;
 	default:
 		cancel_sync( svars );
@@ -1889,7 +1889,7 @@ msgs_copied( sync_vars_t *svars, int t )
 					uchar c = arc4_getbyte() & 0x3f;
 					srec->tuid[i] = (char)(c < 26 ? c + 'A' : c < 52 ? c + 'a' - 26 : c < 62 ? c + '0' - 52 : c == 62 ? '+' : '/');
 				}
-				JLOG( "# %u %u %." stringify(TUIDL) "s", (srec->uid[M], srec->uid[S], srec->tuid), "%sing message", str_hl[t] );
+				JLOG( "# %u %u %." stringify(TUIDL) "s", (srec->uid[F], srec->uid[N], srec->tuid), "%sing message", str_hl[t] );
 				new_total[t]++;
 				stats();
 				svars->new_pending[t]++;
@@ -1913,14 +1913,14 @@ msgs_copied( sync_vars_t *svars, int t )
 
 	if (svars->maxuid[1-t] != svars->newmaxuid[1-t]) {
 		svars->maxuid[1-t] = svars->newmaxuid[1-t];
-		JLOG( "S %d", 1-t, "commit maxuid of %s", str_ms[1-t] );
+		JLOG( "S %d", 1-t, "commit maxuid of %s", str_fn[1-t] );
 	}
 	sync_close( svars, 1-t );
 	if (check_cancel( svars ))
 		goto out;
 
 	if (svars->state[t] & ST_FIND_NEW) {
-		debug( "finding just copied messages on %s\n", str_ms[t] );
+		debug( "finding just copied messages on %s\n", str_fn[t] );
 		svars->drv[t]->find_new_msgs( svars->ctx[t], svars->newuid[t], msgs_found_new, AUX );
 	} else {
 		msgs_new_done( svars, t );
@@ -1936,10 +1936,10 @@ msgs_found_new( int sts, message_t *msgs, void *aux )
 	SVARS_CHECK_RET;
 	switch (sts) {
 	case DRV_OK:
-		debug( "matching just copied messages on %s\n", str_ms[t] );
+		debug( "matching just copied messages on %s\n", str_fn[t] );
 		break;
 	default:
-		warn( "Warning: cannot find newly stored messages on %s.\n", str_ms[t] );
+		warn( "Warning: cannot find newly stored messages on %s.\n", str_fn[t] );
 		break;
 	}
 	match_tuids( svars, t, msgs );
@@ -1978,22 +1978,22 @@ static void
 flags_set_p2( sync_vars_t *svars, sync_rec_t *srec, int t )
 {
 	if (srec->wstate & W_DELETE) {
-		JLOG( "%c %u %u 0", ("><"[t], srec->uid[M], srec->uid[S]), "%sed deletion", str_hl[t] );
+		JLOG( "%c %u %u 0", ("><"[t], srec->uid[F], srec->uid[N]), "%sed deletion", str_hl[t] );
 		srec->uid[1-t] = 0;
 	} else {
 		uchar nflags = (srec->flags | srec->aflags[t]) & ~srec->dflags[t];
 		if (srec->flags != nflags) {
-			JLOG( "* %u %u %u", (srec->uid[M], srec->uid[S], nflags), "%sed flags; were %u", (str_hl[t], srec->flags) );
+			JLOG( "* %u %u %u", (srec->uid[F], srec->uid[N], nflags), "%sed flags; were %u", (str_hl[t], srec->flags) );
 			srec->flags = nflags;
 		}
-		if (t == S) {
+		if (t == N) {
 			uchar nex = (srec->wstate / W_NEXPIRE) & 1;
 			if (nex != ((srec->status / S_EXPIRED) & 1)) {
 				srec->status = (srec->status & ~S_EXPIRED) | (nex * S_EXPIRED);
-				JLOG( "~ %u %u %u", (srec->uid[M], srec->uid[S], srec->status), "expired %d - commit", nex );
+				JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "expired %d - commit", nex );
 			} else if (nex != ((srec->status / S_EXPIRE) & 1)) {
 				srec->status = (srec->status & ~S_EXPIRE) | (nex * S_EXPIRE);
-				JLOG( "~ %u %u %u", (srec->uid[M], srec->uid[S], srec->status), "expire %d - cancel", nex );
+				JLOG( "~ %u %u %u", (srec->uid[F], srec->uid[N], srec->status), "expire %d - cancel", nex );
 			}
 		}
 	}
@@ -2021,13 +2021,13 @@ msgs_flags_set( sync_vars_t *svars, int t )
 
 	if ((svars->chan->ops[t] & OP_EXPUNGE) &&
 	    (svars->ctx[t]->conf->trash || (svars->ctx[1-t]->conf->trash && svars->ctx[1-t]->conf->trash_remote_new))) {
-		debug( "trashing in %s\n", str_ms[t] );
+		debug( "trashing on %s\n", str_fn[t] );
 		for (tmsg = svars->msgs[t]; tmsg; tmsg = tmsg->next)
 			if ((tmsg->flags & F_DELETED) && !find_uint_array( svars->trashed_msgs[t].array, tmsg->uid ) &&
-			    (t == M || !tmsg->srec || !(tmsg->srec->status & (S_EXPIRE|S_EXPIRED)))) {
+			    (t == F || !tmsg->srec || !(tmsg->srec->status & (S_EXPIRE|S_EXPIRED)))) {
 				if (svars->ctx[t]->conf->trash) {
 					if (!svars->ctx[t]->conf->trash_only_new || !tmsg->srec || (tmsg->srec->status & (S_PENDING | S_SKIPPED))) {
-						debug( "%s: trashing message %u\n", str_ms[t], tmsg->uid );
+						debug( "%s: trashing message %u\n", str_fn[t], tmsg->uid );
 						trash_total[t]++;
 						stats();
 						svars->trash_pending[t]++;
@@ -2038,11 +2038,11 @@ msgs_flags_set( sync_vars_t *svars, int t )
 						if (check_cancel( svars ))
 							goto out;
 					} else
-						debug( "%s: not trashing message %u - not new\n", str_ms[t], tmsg->uid );
+						debug( "%s: not trashing message %u - not new\n", str_fn[t], tmsg->uid );
 				} else {
 					if (!tmsg->srec || (tmsg->srec->status & (S_PENDING | S_SKIPPED))) {
 						if (tmsg->size <= svars->ctx[1-t]->conf->max_size) {
-							debug( "%s: remote trashing message %u\n", str_ms[t], tmsg->uid );
+							debug( "%s: remote trashing message %u\n", str_fn[t], tmsg->uid );
 							trash_total[t]++;
 							stats();
 							svars->trash_pending[t]++;
@@ -2055,9 +2055,9 @@ msgs_flags_set( sync_vars_t *svars, int t )
 							if (check_cancel( svars ))
 								goto out;
 						} else
-							debug( "%s: not remote trashing message %u - too big\n", str_ms[t], tmsg->uid );
+							debug( "%s: not remote trashing message %u - too big\n", str_fn[t], tmsg->uid );
 					} else
-						debug( "%s: not remote trashing message %u - not new\n", str_ms[t], tmsg->uid );
+						debug( "%s: not remote trashing message %u - not new\n", str_fn[t], tmsg->uid );
 				}
 			}
 	}
@@ -2079,7 +2079,7 @@ msg_trashed( int sts, void *aux )
 	if (check_ret( sts, vars->aux ))
 		return;
 	INIT_SVARS(vars->aux);
-	JLOG( "T %d %u", (t, vars->msg->uid), "trashed on %s", str_ms[t] );
+	JLOG( "T %d %u", (t, vars->msg->uid), "trashed on %s", str_fn[t] );
 	free( vars );
 	trash_done[t]++;
 	stats();
@@ -2101,7 +2101,7 @@ msg_rtrashed( int sts, uint uid ATTR_UNUSED, copy_vars_t *vars )
 		return;
 	}
 	t ^= 1;
-	JLOG( "T %d %u", (t, vars->msg->uid), "trashed remotely on %s", str_ms[1-t] );
+	JLOG( "T %d %u", (t, vars->msg->uid), "trashed remotely on %s", str_fn[1-t] );
 	free( vars );
 	trash_done[t]++;
 	stats();
@@ -2124,7 +2124,7 @@ sync_close( sync_vars_t *svars, int t )
 	svars->state[t] |= ST_CLOSING;
 
 	if ((svars->chan->ops[t] & OP_EXPUNGE) /*&& !(svars->state[t] & ST_TRASH_BAD)*/) {
-		debug( "expunging %s\n", str_ms[t] );
+		debug( "expunging %s\n", str_fn[t] );
 		svars->drv[t]->close_box( svars->ctx[t], box_closed, AUX );
 	} else {
 		box_closed_p2( svars, t );
@@ -2152,23 +2152,23 @@ box_closed_p2( sync_vars_t *svars, int t )
 	// the operations are idempotent, and we're about to commit the new state
 	// right afterwards anyway.
 
-	if (((svars->state[M] | svars->state[S]) & ST_DID_EXPUNGE) || svars->chan->max_messages) {
+	if (((svars->state[F] | svars->state[N]) & ST_DID_EXPUNGE) || svars->chan->max_messages) {
 		debug( "purging obsolete entries\n" );
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
-			if (!srec->uid[S] || ((srec->wstate & W_DEL(S)) && (svars->state[S] & ST_DID_EXPUNGE))) {
-				if (!srec->uid[M] || ((srec->wstate & W_DEL(M)) && (svars->state[M] & ST_DID_EXPUNGE)) ||
-				    ((srec->status & S_EXPIRED) && svars->maxuid[M] >= srec->uid[M] && svars->mmaxxuid >= srec->uid[M])) {
-					JLOG( "- %u %u", (srec->uid[M], srec->uid[S]), "killing" );
+			if (!srec->uid[N] || ((srec->wstate & W_DEL(N)) && (svars->state[N] & ST_DID_EXPUNGE))) {
+				if (!srec->uid[F] || ((srec->wstate & W_DEL(F)) && (svars->state[F] & ST_DID_EXPUNGE)) ||
+				    ((srec->status & S_EXPIRED) && svars->maxuid[F] >= srec->uid[F] && svars->maxxfuid >= srec->uid[F])) {
+					JLOG( "- %u %u", (srec->uid[F], srec->uid[N]), "killing" );
 					srec->status = S_DEAD;
-				} else if (srec->uid[S]) {
-					JLOG( "> %u %u 0", (srec->uid[M], srec->uid[S]), "orphaning" );
-					srec->uid[S] = 0;
+				} else if (srec->uid[N]) {
+					JLOG( "> %u %u 0", (srec->uid[F], srec->uid[N]), "orphaning" );
+					srec->uid[N] = 0;
 				}
-			} else if (srec->uid[M] && ((srec->wstate & W_DEL(M)) && (svars->state[M] & ST_DID_EXPUNGE))) {
-				JLOG( "< %u %u 0", (srec->uid[M], srec->uid[S]), "orphaning" );
-				srec->uid[M] = 0;
+			} else if (srec->uid[F] && ((srec->wstate & W_DEL(F)) && (svars->state[F] & ST_DID_EXPUNGE))) {
+				JLOG( "< %u %u 0", (srec->uid[F], srec->uid[N]), "orphaning" );
+				srec->uid[F] = 0;
 			}
 		}
 	}
@@ -2176,7 +2176,7 @@ box_closed_p2( sync_vars_t *svars, int t )
 	// This is just an optimization, so it needs no journaling of intermediate states.
 	// However, doing it before the entry purge would require ensuring that the
 	// exception list includes all relevant messages.
-	JLOG( "! %u", svars->mmaxxuid, "max expired UID on master" );
+	JLOG( "! %u", svars->maxxfuid, "max expired UID on far side" );
 
 	save_state( svars );
 
@@ -2188,8 +2188,8 @@ sync_bail( sync_vars_t *svars )
 {
 	sync_rec_t *srec, *nsrec;
 
-	free( svars->trashed_msgs[M].array.data );
-	free( svars->trashed_msgs[S].array.data );
+	free( svars->trashed_msgs[F].array.data );
+	free( svars->trashed_msgs[N].array.data );
 	for (srec = svars->srecs; srec; srec = nsrec) {
 		nsrec = srec->next;
 		free( srec );
@@ -2214,8 +2214,8 @@ sync_bail2( sync_vars_t *svars )
 static void
 sync_bail3( sync_vars_t *svars )
 {
-	free( svars->box_name[M] );
-	free( svars->box_name[S] );
+	free( svars->box_name[F] );
+	free( svars->box_name[N] );
 	sync_deref( svars );
 }
 

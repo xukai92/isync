@@ -174,21 +174,21 @@ getopt_helper( conffile_t *cfile, int *cops, channel_conf_t *conf )
 			else if (!strcasecmp( "Flags", arg ))
 				*cops |= OP_FLAGS;
 			else if (!strcasecmp( "PullReNew", arg ))
-				conf->ops[S] |= OP_RENEW;
+				conf->ops[N] |= OP_RENEW;
 			else if (!strcasecmp( "PullNew", arg ))
-				conf->ops[S] |= OP_NEW;
+				conf->ops[N] |= OP_NEW;
 			else if (!strcasecmp( "PullDelete", arg ))
-				conf->ops[S] |= OP_DELETE;
+				conf->ops[N] |= OP_DELETE;
 			else if (!strcasecmp( "PullFlags", arg ))
-				conf->ops[S] |= OP_FLAGS;
+				conf->ops[N] |= OP_FLAGS;
 			else if (!strcasecmp( "PushReNew", arg ))
-				conf->ops[M] |= OP_RENEW;
+				conf->ops[F] |= OP_RENEW;
 			else if (!strcasecmp( "PushNew", arg ))
-				conf->ops[M] |= OP_NEW;
+				conf->ops[F] |= OP_NEW;
 			else if (!strcasecmp( "PushDelete", arg ))
-				conf->ops[M] |= OP_DELETE;
+				conf->ops[F] |= OP_DELETE;
 			else if (!strcasecmp( "PushFlags", arg ))
-				conf->ops[M] |= OP_FLAGS;
+				conf->ops[F] |= OP_FLAGS;
 			else if (!strcasecmp( "All", arg ) || !strcasecmp( "Full", arg ))
 				*cops |= XOP_PULL|XOP_PUSH;
 			else if (strcasecmp( "None", arg ) && strcasecmp( "Noop", arg )) {
@@ -197,7 +197,7 @@ getopt_helper( conffile_t *cfile, int *cops, channel_conf_t *conf )
 				cfile->err = 1;
 			}
 		while ((arg = get_arg( cfile, ARG_OPTIONAL, NULL )));
-		conf->ops[M] |= XOP_HAVE_TYPE;
+		conf->ops[F] |= XOP_HAVE_TYPE;
 	} else if (!strcasecmp( "SyncState", cfile->cmd ))
 		conf->sync_state = expand_strdup( cfile->val );
 	else if (!strcasecmp( "CopyArrivalDate", cfile->cmd ))
@@ -214,17 +214,23 @@ getopt_helper( conffile_t *cfile, int *cops, channel_conf_t *conf )
 				do {
 					if (!strcasecmp( "Both", arg )) {
 						*cops |= op;
-					} else if (!strcasecmp( "Master", arg )) {
-						conf->ops[M] |= op;
-					} else if (!strcasecmp( "Slave", arg )) {
-						conf->ops[S] |= op;
+					} else if (!strcasecmp( "Far", arg )) {
+						conf->ops[F] |= op;
+					} else if (!strcasecmp( "Master", arg )) {  // Pre-1.4 legacy
+						conf->ops[F] |= op;
+						cfile->ms_warn = 1;
+					} else if (!strcasecmp( "Near", arg )) {
+						conf->ops[N] |= op;
+					} else if (!strcasecmp( "Slave", arg )) {  // Pre-1.4 legacy
+						conf->ops[N] |= op;
+						cfile->ms_warn = 1;
 					} else if (strcasecmp( "None", arg )) {
 						error( "%s:%d: invalid %s arg '%s'\n",
 						       cfile->file, cfile->line, boxOps[i].name, arg );
 						cfile->err = 1;
 					}
 				} while ((arg = get_arg( cfile, ARG_OPTIONAL, NULL )));
-				conf->ops[M] |= op * (XOP_HAVE_EXPUNGE / OP_EXPUNGE);
+				conf->ops[F] |= op * (XOP_HAVE_EXPUNGE / OP_EXPUNGE);
 				return 1;
 			}
 		}
@@ -265,25 +271,25 @@ merge_ops( int cops, int ops[] )
 	int aops, op;
 	uint i;
 
-	aops = ops[M] | ops[S];
-	if (ops[M] & XOP_HAVE_TYPE) {
+	aops = ops[F] | ops[N];
+	if (ops[F] & XOP_HAVE_TYPE) {
 		if (aops & OP_MASK_TYPE) {
 			if (aops & cops & OP_MASK_TYPE) {
 			  cfl:
 				error( "Conflicting Sync args specified.\n" );
 				return 1;
 			}
-			ops[M] |= cops & OP_MASK_TYPE;
-			ops[S] |= cops & OP_MASK_TYPE;
+			ops[F] |= cops & OP_MASK_TYPE;
+			ops[N] |= cops & OP_MASK_TYPE;
 			if (cops & XOP_PULL) {
-				if (ops[S] & OP_MASK_TYPE)
+				if (ops[N] & OP_MASK_TYPE)
 					goto cfl;
-				ops[S] |= OP_MASK_TYPE;
+				ops[N] |= OP_MASK_TYPE;
 			}
 			if (cops & XOP_PUSH) {
-				if (ops[M] & OP_MASK_TYPE)
+				if (ops[F] & OP_MASK_TYPE)
 					goto cfl;
-				ops[M] |= OP_MASK_TYPE;
+				ops[F] |= OP_MASK_TYPE;
 			}
 		} else if (cops & (OP_MASK_TYPE|XOP_MASK_DIR)) {
 			if (!(cops & OP_MASK_TYPE))
@@ -291,20 +297,20 @@ merge_ops( int cops, int ops[] )
 			else if (!(cops & XOP_MASK_DIR))
 				cops |= XOP_PULL|XOP_PUSH;
 			if (cops & XOP_PULL)
-				ops[S] |= cops & OP_MASK_TYPE;
+				ops[N] |= cops & OP_MASK_TYPE;
 			if (cops & XOP_PUSH)
-				ops[M] |= cops & OP_MASK_TYPE;
+				ops[F] |= cops & OP_MASK_TYPE;
 		}
 	}
 	for (i = 0; i < as(boxOps); i++) {
 		op = boxOps[i].op;
-		if (ops[M] & (op * (XOP_HAVE_EXPUNGE / OP_EXPUNGE))) {
+		if (ops[F] & (op * (XOP_HAVE_EXPUNGE / OP_EXPUNGE))) {
 			if (aops & cops & op) {
 				error( "Conflicting %s args specified.\n", boxOps[i].name );
 				return 1;
 			}
-			ops[M] |= cops & op;
-			ops[S] |= cops & op;
+			ops[F] |= cops & op;
+			ops[N] |= cops & op;
 		}
 	}
 	return 0;
@@ -320,7 +326,7 @@ load_config( const char *where, int pseudo )
 	string_list_t *chanlist, **chanlistapp;
 	char *arg, *p;
 	uint len, max_size;
-	int cops, gcops, ms, i;
+	int cops, gcops, fn, i;
 	char path[_POSIX_PATH_MAX];
 	char buf[1024];
 
@@ -343,6 +349,7 @@ load_config( const char *where, int pseudo )
 	cfile.bufl = sizeof(buf) - 1;
 	cfile.line = 0;
 	cfile.err = 0;
+	cfile.ms_warn = 0;
 	cfile.rest = NULL;
 
 	gcops = 0;
@@ -384,11 +391,19 @@ load_config( const char *where, int pseudo )
 						add_string_list( &channel->patterns, arg );
 					while ((arg = get_arg( &cfile, ARG_OPTIONAL, NULL )));
 				}
-				else if (!strcasecmp( "Master", cfile.cmd )) {
-					ms = M;
+				else if (!strcasecmp( "Far", cfile.cmd )) {
+					fn = F;
 					goto linkst;
-				} else if (!strcasecmp( "Slave", cfile.cmd )) {
-					ms = S;
+				} else if (!strcasecmp( "Master", cfile.cmd )) {  // Pre-1.4 legacy
+					fn = F;
+					goto olinkst;
+				} else if (!strcasecmp( "Near", cfile.cmd )) {
+					fn = N;
+					goto linkst;
+				} else if (!strcasecmp( "Slave", cfile.cmd )) {  // Pre-1.4 legacy
+					fn = N;
+				  olinkst:
+					cfile.ms_warn = 1;
 				  linkst:
 					if (*cfile.val != ':' || !(p = strchr( cfile.val + 1, ':' ))) {
 						error( "%s:%d: malformed mailbox spec\n",
@@ -399,7 +414,7 @@ load_config( const char *where, int pseudo )
 					*p = 0;
 					for (store = stores; store; store = store->next)
 						if (!strcmp( store->name, cfile.val + 1 )) {
-							channel->stores[ms] = store;
+							channel->stores[fn] = store;
 							goto stpcom;
 						}
 					error( "%s:%d: unknown store '%s'\n",
@@ -408,17 +423,17 @@ load_config( const char *where, int pseudo )
 					continue;
 				  stpcom:
 					if (*++p)
-						channel->boxes[ms] = nfstrdup( p );
+						channel->boxes[fn] = nfstrdup( p );
 				} else if (!getopt_helper( &cfile, &cops, channel )) {
 					error( "%s:%d: unknown keyword '%s'\n", cfile.file, cfile.line, cfile.cmd );
 					cfile.err = 1;
 				}
 			}
-			if (!channel->stores[M]) {
-				error( "channel '%s' refers to no master store\n", channel->name );
+			if (!channel->stores[F]) {
+				error( "channel '%s' refers to no far side store\n", channel->name );
 				cfile.err = 1;
-			} else if (!channel->stores[S]) {
-				error( "channel '%s' refers to no slave store\n", channel->name );
+			} else if (!channel->stores[N]) {
+				error( "channel '%s' refers to no near side store\n", channel->name );
 				cfile.err = 1;
 			} else if (merge_ops( cops, channel->ops ))
 				cfile.err = 1;
@@ -426,7 +441,7 @@ load_config( const char *where, int pseudo )
 				if (max_size != UINT_MAX) {
 					if (!max_size)
 						max_size = UINT_MAX;
-					channel->stores[M]->max_size = channel->stores[S]->max_size = max_size;
+					channel->stores[F]->max_size = channel->stores[N]->max_size = max_size;
 				}
 				*channelapp = channel;
 				channelapp = &channel->next;
@@ -505,6 +520,8 @@ load_config( const char *where, int pseudo )
 		}
 	}
 	fclose (cfile.fp);
+	if (cfile.ms_warn)
+		warn( "Notice: Master/Slave are deprecated; use Far/Near instead.\n" );
 	cfile.err |= merge_ops( gcops, global_conf.ops );
 	if (!global_conf.sync_state)
 		global_conf.sync_state = expand_strdup( "~/." EXE "/" );

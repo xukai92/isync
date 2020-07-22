@@ -23,9 +23,9 @@ Pass xxxxxxxx
 #PassCmd "echo -ne 'GET myIsp\\tpassword' | pwmc datafile"
 
 Channel work
-Master :work:
-Slave :local:work
-Expunge Slave
+Far :work:
+Near :local:work
+Expunge Near
 Sync PullNew Push
 
 
@@ -35,8 +35,8 @@ Port 6789
 RequireSSL no
 
 Channel personal
-Master :personal:
-Slave :local:personal
+Far :personal:
+Near :local:personal
 Expunge Both
 MaxMessages 150
 MaxSize 200k
@@ -45,8 +45,8 @@ IMAPStore remote
 Tunnel "ssh -q host.remote.com /usr/sbin/imapd"
 
 Channel remote
-Master :remote:
-Slave :local:remote
+Far :remote:
+Near :local:remote
 
 
 Group boxes
@@ -65,8 +65,8 @@ RequireSSL no
 UseTLSv1 no
 
 Channel rst
-Master :st1:somebox
-Slave :st2:
+Far :st1:somebox
+Near :st2:
 
 
 IMAPAccount server
@@ -84,14 +84,14 @@ Path ~/Maildir/
 SubFolders Verbatim
 
 Channel o2o
-Master :server:
-Slave :mirror:
+Far :server:
+Near :mirror:
 Patterns %
 
 Group partial o2o:inbox,sent-mail,foobar
 
 # INBOX => server, INBOX.foo => server.foo, etc.
 Channel inbox
-Master :server:INBOX
-Slave :mirror:server
+Far :server:INBOX
+Near :mirror:server
 Patterns *
