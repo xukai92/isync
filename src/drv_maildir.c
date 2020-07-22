@@ -1325,9 +1325,11 @@ maildir_open_box( store_t *gctx,
 }
 
 static int
-maildir_get_uidnext( store_t *gctx ATTR_UNUSED )
+maildir_get_uidnext( store_t *gctx )
 {
-	return 0;
+	maildir_store_t *ctx = (maildir_store_t *)gctx;
+
+	return ctx->nuid;
 }
 
 static xint
