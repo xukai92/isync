@@ -430,6 +430,32 @@ socket_close_internal( conn_t *sock )
 	sock->fd = -1;
 }
 
+#ifndef HAVE_IPV6
+struct addr_info {
+	struct addr_info *ai_next;
+	struct sockaddr_in ai_addr[1];
+};
+
+#define freeaddrinfo(ai) free( ai )
+
+static struct addr_info *
+init_addrinfo( struct hostent *he )
+{
+	uint naddr = 0;
+	for (char **addr = he->h_addr_list; *addr; addr++)
+		naddr++;
+	struct addr_info *caddr = nfcalloc( naddr * sizeof(struct addrinfo) );
+	struct addr_info *ret, **caddrp = &ret;
+	for (char **addr = he->h_addr_list; *addr; addr++, caddr++) {
+		caddr->ai_addr->sin_family = AF_INET;
+		memcpy( &caddr->ai_addr->sin_addr.s_addr, *addr, sizeof(struct in_addr) );
+		*caddrp = caddr;
+		caddrp = &caddr->ai_next;
+	}
+	return ret;
+}
+#endif
+
 void
 socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 {
@@ -479,8 +505,6 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 			return;
 		}
 		info( "\vok\n" );
-
-		sock->curr_addr = sock->addrs;
 #else
 		struct hostent *he;
 
@@ -493,8 +517,9 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		}
 		info( "\vok\n" );
 
-		sock->curr_addr = he->h_addr_list;
+		sock->addrs = init_addrinfo( he );
 #endif
+		sock->curr_addr = sock->addrs;
 		socket_connect_one( sock );
 	}
 }
@@ -506,16 +531,10 @@ socket_connect_one( conn_t *sock )
 #ifdef HAVE_IPV6
 	struct addrinfo *ai;
 #else
-	struct {
-		struct sockaddr_in ai_addr[1];
-	} ai[1];
+	struct addr_info *ai;
 #endif
 
-#ifdef HAVE_IPV6
 	if (!(ai = sock->curr_addr)) {
-#else
-	if (!*sock->curr_addr) {
-#endif
 		error( "No working address found for %s\n", sock->conf->host );
 		socket_connect_bail( sock );
 		return;
@@ -532,11 +551,6 @@ socket_connect_one( conn_t *sock )
 #endif
 	{
 		struct sockaddr_in *in = ((struct sockaddr_in *)ai->ai_addr);
-#ifndef HAVE_IPV6
-		memset( in, 0, sizeof(*in) );
-		in->sin_family = AF_INET;
-		in->sin_addr.s_addr = *((int *)*sock->curr_addr);
-#endif
 		in->sin_port = htons( sock->conf->port );
 		nfasprintf( &sock->name, "%s (%s:%hu)",
 		            sock->conf->host, inet_ntoa( in->sin_addr ), sock->conf->port );
@@ -579,11 +593,7 @@ socket_connect_next( conn_t *conn )
 	sys_error( "Cannot connect to %s", conn->name );
 	free( conn->name );
 	conn->name = 0;
-#ifdef HAVE_IPV6
 	conn->curr_addr = conn->curr_addr->ai_next;
-#else
-	conn->curr_addr++;
-#endif
 	socket_connect_one( conn );
 }
 
@@ -597,12 +607,10 @@ socket_connect_failed( conn_t *conn )
 static void
 socket_connected( conn_t *conn )
 {
-#ifdef HAVE_IPV6
 	if (conn->addrs) {
 		freeaddrinfo( conn->addrs );
 		conn->addrs = 0;
 	}
-#endif
 	conf_notifier( &conn->notify, 0, POLLIN );
 	socket_expect_read( conn, 0 );
 	conn->state = SCK_READY;
@@ -612,12 +620,10 @@ socket_connected( conn_t *conn )
 static void
 socket_cleanup_names( conn_t *conn )
 {
-#ifdef HAVE_IPV6
 	if (conn->addrs) {
 		freeaddrinfo( conn->addrs );
 		conn->addrs = 0;
 	}
-#endif
 	free( conn->name );
 	conn->name = 0;
 }

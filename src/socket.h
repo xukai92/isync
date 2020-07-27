@@ -73,7 +73,7 @@ typedef struct {
 #ifdef HAVE_IPV6
 	struct addrinfo *addrs, *curr_addr; /* needed during connect */
 #else
-	char **curr_addr; /* needed during connect */
+	struct addr_info *addrs, *curr_addr; /* needed during connect */
 #endif
 	char *name;
 #ifdef HAVE_LIBSSL
