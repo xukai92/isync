@@ -288,14 +288,6 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# END
 #endif
 
-//# SPECIAL commit_cmds
-static void
-proxy_commit_cmds( store_t *gctx )
-{
-	// Currently a dummy in all real drivers.
-	(void) gctx;
-}
-
 //# SPECIAL set_bad_callback
 static void
 proxy_set_bad_callback( store_t *gctx, void (*cb)( void *aux ), void *aux )
