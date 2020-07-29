@@ -194,7 +194,6 @@ verify_cert_host( const server_conf_t *conf, conn_t *sock )
 	int i;
 	long err;
 	X509 *cert;
-	STACK_OF(X509_OBJECT) *trusted;
 
 	cert = SSL_get_peer_certificate( sock->ssl );
 	if (!cert) {
@@ -202,9 +201,8 @@ verify_cert_host( const server_conf_t *conf, conn_t *sock )
 		return -1;
 	}
 
-	trusted = (STACK_OF(X509_OBJECT) *)sock->conf->trusted_certs;
-	for (i = 0; i < sk_X509_OBJECT_num( trusted ); i++) {
-		if (!X509_cmp( cert, X509_OBJECT_get0_X509( sk_X509_OBJECT_value( trusted, i ) ) )) {
+	for (i = 0; i < sk_X509_num( sock->conf->trusted_certs ); i++) {
+		if (!X509_cmp( cert, sk_X509_value( sock->conf->trusted_certs, i ) )) {
 			X509_free( cert );
 			return 0;
 		}
@@ -273,11 +271,33 @@ DIAG_POP
 		return 0;
 	}
 
-	if (conf->cert_file && !SSL_CTX_load_verify_locations( mconf->SSLContext, conf->cert_file, NULL )) {
-		print_ssl_errors( "loading certificate file '%s'", conf->cert_file );
-		return 0;
+	if (!(mconf->trusted_certs = sk_X509_new_null()))
+		oom();
+	if (conf->cert_file) {
+		X509_STORE *store;
+		if (!(store = X509_STORE_new()))
+			oom();
+		if (!X509_STORE_load_locations( store, conf->cert_file, NULL )) {
+			print_ssl_errors( "loading certificate file '%s'", conf->cert_file );
+			return 0;
+		}
+		STACK_OF(X509_OBJECT) *objs = X509_STORE_get0_objects( store );
+		for (int i = 0; i < sk_X509_OBJECT_num( objs ); i++) {
+			X509 *cert = X509_OBJECT_get0_X509( sk_X509_OBJECT_value( objs, i ) );
+			if (cert) {
+				if (X509_check_ca( cert )) {
+					if (!X509_STORE_add_cert( SSL_CTX_get_cert_store( mconf->SSLContext ), cert ))
+						oom();
+				} else {
+					X509_up_ref( cert );  // Locking failure assumed impossible
+					if (!sk_X509_push( mconf->trusted_certs, cert ))
+						oom();
+				}
+			}
+		}
+		X509_STORE_free( store );
 	}
-	mconf->trusted_certs = (_STACK *)sk_X509_OBJECT_dup( X509_STORE_get0_objects( SSL_CTX_get_cert_store( mconf->SSLContext ) ) );
+
 	if (mconf->system_certs && !SSL_CTX_set_default_verify_paths( mconf->SSLContext )) {
 		ulong err;
 		while ((err = ERR_get_error()))

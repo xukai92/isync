@@ -353,7 +353,7 @@ nfsnprintf( char *buf, int blen, const char *fmt, ... )
 	return ret;
 }
 
-static void ATTR_NORETURN
+void
 oom( void )
 {
 	fputs( "Fatal: Out of memory\n", stderr );

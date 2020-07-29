@@ -172,6 +172,7 @@ int ATTR_PRINTFLIKE(2, 0) nfvasprintf( char **str, const char *fmt, va_list va )
 int ATTR_PRINTFLIKE(2, 3) nfasprintf( char **str, const char *fmt, ... );
 int ATTR_PRINTFLIKE(3, 4) nfsnprintf( char *buf, int blen, const char *fmt, ... );
 void ATTR_NORETURN oob( void );
+void ATTR_NORETURN oom( void );
 
 char *expand_strdup( const char *s );
 

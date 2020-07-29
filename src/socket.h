@@ -31,6 +31,7 @@
 
 #ifdef HAVE_LIBSSL
 # include <openssl/ssl.h>
+# include <openssl/x509.h>
 
 enum {
 	TLSv1 = 4,
@@ -55,7 +56,7 @@ typedef struct {
 
 	/* these are actually variables and are leaked at the end */
 	char ssl_ctx_valid;
-	_STACK *trusted_certs;
+	STACK_OF(X509) *trusted_certs;
 	SSL_CTX *SSLContext;
 #endif
 } server_conf_t;
