@@ -379,17 +379,27 @@ if you want to trust only hand-picked certificates.
 \fBCertificateFile\fR \fIpath\fR
 File containing additional X.509 certificates used to verify server
 identities.
-These certificates are always trusted, regardless of validity.
+It may contain two types of certificates:
+.RS
+.IP Host
+These certificates are matched only against the received server certificate
+itself.
+They are always trusted, regardless of validity.
+A typical use case would be forcing acceptance of an expired certificate.
 .br
-The certificates from this file are matched only against the received
-server certificate itself; CA certificates are \fBnot\fR supported here.
-Do \fBnot\fR specify the system's CA certificate store here; see
-\fBSystemCertificates\fR instead.
-.br
-The contents for this file may be obtained using the
-\fBmbsync-get-cert\fR tool; make sure to verify the fingerprints of the
-certificates before trusting them, or transfer them securely from the
-server's network (if it is trusted).
+These certificates may be obtained using the \fBmbsync-get-cert\fR tool;
+make sure to verify their fingerprints before trusting them, or transfer
+them securely from the server's network (if it can be trusted beyond the
+server itself).
+.IP CA
+These certificates are used as trust anchors when building the certificate
+chain for the received server certificate.
+They are used to supplant or supersede the system's trust store, depending
+on the \fBSystemCertificates\fR setting;
+it is not necessary and not recommended to specify the system's trust store
+itself here.
+The trust chains are fully validated.
+.RE
 .
 .TP
 \fBClientCertificate\fR \fIpath\fR
