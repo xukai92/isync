@@ -1269,7 +1269,7 @@ maildir_select_box( store_t *gctx, const char *name )
 		}
 	} else {
 		if (!(ctx->path = maildir_join_path( conf, 0, name )))
-		    return DRV_CANCELED;
+		    return DRV_STORE_BAD;
 		ctx->is_inbox = 0;
 	}
 	return ctx->path ? DRV_OK : DRV_BOX_BAD;

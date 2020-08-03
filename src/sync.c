@@ -1190,7 +1190,7 @@ sync_boxes( store_t *ctx[], const char * const names[], int present[], channel_c
 	 * don't run into uninitialized variables. */
 	for (t = 0; t < 2; t++) {
 		switch (svars->drv[t]->select_box( ctx[t], svars->box_name[t] )) {
-		case DRV_CANCELED:
+		case DRV_STORE_BAD:
 			store_bad( AUX );
 			return;
 		case DRV_BOX_BAD:
