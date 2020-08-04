@@ -1824,6 +1824,8 @@ imap_alloc_store( store_conf_t *conf, const char *label )
 
 	/* Finally, schedule opening a new server connection. */
 	ctx = nfcalloc( sizeof(*ctx) );
+	ctx->gen.driver = &imap_driver;
+	ctx->ref_count = 1;
 	socket_init( &ctx->conn, &srvc->sconf,
 	             (void (*)( void * ))imap_invoke_bad_callback,
 	             imap_socket_read, (void (*)(void *))flush_imap_cmds, ctx );
@@ -1832,10 +1834,8 @@ imap_alloc_store( store_conf_t *conf, const char *label )
 	ctx->wait_check_append = &ctx->wait_check;
 
   gotsrv:
-	ctx->gen.driver = &imap_driver;
 	ctx->gen.conf = conf;
 	ctx->label = label;
-	ctx->ref_count = 1;
 	return &ctx->gen;
 }
 
