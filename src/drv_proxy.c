@@ -309,9 +309,11 @@ proxy_set_bad_callback( store_t *gctx, void (*cb)( void *aux ), void *aux )
 static void
 proxy_invoke_bad_callback( proxy_store_t *ctx )
 {
+	ctx->ref_count++;
 	debug( "%sCallback enter bad store\n", ctx->label );
 	ctx->bad_callback( ctx->bad_callback_aux );
-	debug( "%sCallback leave bad store\n", ctx->label ); \
+	debug( "%sCallback leave bad store\n", ctx->label );
+	proxy_store_deref( ctx );
 }
 
 //# EXCLUDE alloc_store

@@ -1586,14 +1586,6 @@ get_cmd_result_p2( imap_store_t *ctx, imap_cmd_t *cmd, int response )
 
 /******************* imap_cancel_store *******************/
 
-
-static void
-imap_cleanup_store( imap_store_t *ctx )
-{
-	free_generic_messages( ctx->msgs );
-	free_string_list( ctx->boxes );
-}
-
 static void
 imap_cancel_store( store_t *gctx )
 {
@@ -1609,7 +1601,8 @@ imap_cancel_store( store_t *gctx )
 	free_list( ctx->ns_other );
 	free_list( ctx->ns_shared );
 	free_string_list( ctx->auth_mechs );
-	imap_cleanup_store( ctx );
+	free_generic_messages( ctx->msgs );
+	free_string_list( ctx->boxes );
 	imap_deref( ctx );
 }
 
@@ -1746,7 +1739,9 @@ imap_alloc_store( store_conf_t *conf, const char *label )
 	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
 		if (ctx->state != SST_BAD && ((imap_store_conf_t *)ctx->gen.conf)->server == srvc) {
 			*ctxp = ctx->gen.next;
-			imap_cleanup_store( ctx );
+			free_string_list( ctx->boxes );
+			ctx->boxes = NULL;
+			ctx->listed = 0;
 			/* One could ping the server here, but given that the idle timeout
 			 * is at least 30 minutes, this sounds pretty pointless. */
 			ctx->state = SST_HALF;
@@ -1921,7 +1916,7 @@ ensure_password( imap_server_conf_t *srvc )
 	if (cmd) {
 		FILE *fp;
 		int ret;
-		char buffer[2048];  // Hopefully more than enough room for XOAUTH2, etc. tokens
+		char buffer[8192];  // Hopefully more than enough room for XOAUTH2, etc. tokens
 
 		if (*cmd == '+') {
 			flushn();
