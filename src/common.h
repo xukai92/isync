@@ -130,6 +130,7 @@ void ATTR_PRINTFLIKE(1, 2) progress( const char *, ... );
 void ATTR_PRINTFLIKE(1, 2) notice( const char *, ... );
 void ATTR_PRINTFLIKE(1, 2) warn( const char *, ... );
 void ATTR_PRINTFLIKE(1, 2) error( const char *, ... );
+void ATTR_PRINTFLIKE(1, 0) vsys_error( const char *, va_list va );
 void ATTR_PRINTFLIKE(1, 2) sys_error( const char *, ... );
 void flushn( void );
 

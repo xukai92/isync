@@ -1510,14 +1510,16 @@ maildir_rescan( maildir_store_t *ctx )
 	return DRV_OK;
 }
 
-static int
-maildir_again( maildir_store_t *ctx, maildir_message_t *msg,
-               const char *err, const char *fn, const char *fn2 )
+static int ATTR_PRINTFLIKE(3, 0)
+maildir_again( maildir_store_t *ctx, maildir_message_t *msg, const char *err, ... )
 {
 	int ret;
 
 	if (errno != ENOENT) {
-		sys_error( err, fn, fn2 );
+		va_list va;
+		va_start( va, err );
+		vsys_error( err, va );
+		va_end( va );
 		return DRV_BOX_BAD;
 	}
 	if ((ret = maildir_rescan( ctx )) != DRV_OK)
@@ -1539,7 +1541,7 @@ maildir_fetch_msg( store_t *gctx, message_t *gmsg, msg_data_t *data,
 		nfsnprintf( buf, sizeof(buf), "%s/%s/%s", ctx->path, subdirs[gmsg->status & M_RECENT], msg->base );
 		if ((fd = open( buf, O_RDONLY )) >= 0)
 			break;
-		if ((ret = maildir_again( ctx, msg, "Cannot open %s", buf, 0 )) != DRV_OK) {
+		if ((ret = maildir_again( ctx, msg, "Cannot open %s", buf )) != DRV_OK) {
 			cb( ret, aux );
 			return;
 		}
