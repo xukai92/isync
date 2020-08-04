@@ -1805,8 +1805,7 @@ imap_alloc_store( store_conf_t *conf, const char *label )
 	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
 		if (ctx->state == SST_GOOD && ctx->gen.conf == conf) {
 			*ctxp = ctx->gen.next;
-			ctx->label = label;
-			return &ctx->gen;
+			goto gotstore;
 		}
 
 	/* Then try to recycle a server connection. */
@@ -1835,6 +1834,7 @@ imap_alloc_store( store_conf_t *conf, const char *label )
 
   gotsrv:
 	ctx->gen.conf = conf;
+  gotstore:
 	ctx->label = label;
 	return &ctx->gen;
 }
