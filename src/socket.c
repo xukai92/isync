@@ -41,7 +41,7 @@
 # include <openssl/err.h>
 # include <openssl/x509v3.h>
 # if OPENSSL_VERSION_NUMBER < 0x10100000L \
-	|| (defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x2070100fL)
+	|| (defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x2070100fL)
 #  define X509_OBJECT_get0_X509(o) ((o)->data.x509)
 #  define X509_STORE_get0_objects(o) ((o)->objs)
 # endif
