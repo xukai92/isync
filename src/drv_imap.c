@@ -113,6 +113,8 @@ struct imap_store {
 	enum { SST_BAD, SST_HALF, SST_GOOD } state;
 	/* trash folder's existence is not confirmed yet */
 	enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
+	// What kind of BODY-less FETCH response we're expecting.
+	enum { FetchNone, FetchMsgs, FetchUidNext } fetch_sts;
 	uint got_namespace:1;
 	uint has_forwarded:1;
 	char delimiter[2]; /* hierarchy delimiter */
@@ -174,7 +176,6 @@ struct imap_cmd {
 		char to_trash; /* we are storing to trash, not current. */
 		char create; /* create the mailbox if we get an error which suggests so. */
 		char failok; /* Don't complain about NO response. */
-		char lastuid; /* querying the last UID in the mailbox. */
 	} param;
 };
 
@@ -1144,15 +1145,11 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	if (!uid) {
 		// Ignore async flag updates for now.
 		status &= ~(M_FLAGS | M_RECENT);
-	} else if ((cmdp = ctx->in_progress) && cmdp->param.lastuid) {
-		// Workaround for server not sending UIDNEXT and/or APPENDUID.
-		ctx->uidnext = uid + 1;
 	} else if (status & M_BODY) {
 		for (cmdp = ctx->in_progress; cmdp; cmdp = cmdp->next)
 			if (cmdp->param.uid == uid)
 				goto gotuid;
-		error( "IMAP error: unexpected FETCH response (UID %u)\n", uid );
-		return LIST_BAD;
+		goto badrsp;
 	  gotuid:
 		msgdata = ((imap_cmd_fetch_msg_t *)cmdp)->msg_data;
 		msgdata->data = body->val;
@@ -1162,7 +1159,10 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		if (status & M_FLAGS)
 			msgdata->flags = mask;
 		status &= ~(M_FLAGS | M_RECENT | M_BODY | M_DATE);
-	} else {
+	} else if (ctx->fetch_sts == FetchUidNext) {
+		// Workaround for server not sending UIDNEXT and/or APPENDUID.
+		ctx->uidnext = uid + 1;
+	} else if (ctx->fetch_sts == FetchMsgs) {
 		cur = nfcalloc( sizeof(*cur) );
 		*ctx->msgapp = &cur->gen;
 		ctx->msgapp = &cur->gen.next;
@@ -1175,6 +1175,10 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		if (tuid)
 			memcpy( cur->gen.tuid, tuid, TUIDL );
 		status &= ~(M_FLAGS | M_RECENT | M_SIZE | M_HEADER);
+	} else {
+	  badrsp:
+		error( "IMAP error: unexpected FETCH response (UID %u)\n", uid );
+		return LIST_BAD;
 	}
 
 	if (status) {
@@ -2536,8 +2540,9 @@ imap_open_box_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 		return;
 	}
 
+	assert( ctx->fetch_sts == FetchNone );
+	ctx->fetch_sts = FetchUidNext;
 	INIT_IMAP_CMD(imap_cmd_open_box_t, cmd, cmdp->callback, cmdp->callback_aux)
-	cmd->gen.param.lastuid = 1;
 	imap_exec( ctx, &cmd->gen, imap_open_box_p3,
 	           "UID FETCH * (UID)" );
 }
@@ -2547,6 +2552,7 @@ imap_open_box_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 {
 	imap_cmd_open_box_t *cmdp = (imap_cmd_open_box_t *)gcmd;
 
+	ctx->fetch_sts = FetchNone;
 	if (!ctx->uidnext) {
 		if (ctx->total_msgs) {
 			error( "IMAP error: querying server for highest UID failed\n" );
@@ -2714,6 +2720,9 @@ imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint finduid, uint pairu
 		free( excs.data );
 		cb( DRV_OK, NULL, 0, 0, aux );
 	} else {
+		assert( ctx->fetch_sts == FetchNone );
+		ctx->fetch_sts = FetchMsgs;
+
 		INIT_REFCOUNTED_STATE(imap_load_box_state_t, sts, cb, aux)
 		for (uint i = 0; i < excs.size; ) {
 			for (int bl = 0; i < excs.size && bl < 960; i++) {
@@ -2821,6 +2830,7 @@ static void
 imap_submit_load_p3( imap_store_t *ctx, imap_load_box_state_t *sts )
 {
 	DONE_REFCOUNTED_STATE_ARGS(sts, {
+		ctx->fetch_sts = FetchNone;
 		if (sts->gen.ret_val == DRV_OK)
 			imap_sort_msgs( ctx );
 	}, ctx->msgs, ctx->total_msgs, ctx->recent_msgs)
@@ -3126,11 +3136,12 @@ imap_find_new_msgs_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 
 	// We appended messages, so we need to re-query UIDNEXT.
 	ctx->uidnext = 0;
+	assert( ctx->fetch_sts == FetchNone );
+	ctx->fetch_sts = FetchUidNext;
 
 	INIT_IMAP_CMD(imap_cmd_find_new_t, cmd, cmdp->callback, cmdp->callback_aux)
 	cmd->out_msgs = cmdp->out_msgs;
 	cmd->uid = cmdp->uid;
-	cmd->gen.param.lastuid = 1;
 	imap_exec( ctx, &cmd->gen, imap_find_new_msgs_p3,
 	           "UID FETCH * (UID)" );
 }
@@ -3141,6 +3152,7 @@ imap_find_new_msgs_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 	imap_cmd_find_new_t *cmdp = (imap_cmd_find_new_t *)gcmd;
 	imap_cmd_find_new_t *cmd;
 
+	ctx->fetch_sts = FetchNone;
 	if (response != RESP_OK) {
 		imap_find_new_msgs_p4( ctx, gcmd, response );
 		return;
