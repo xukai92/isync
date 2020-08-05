@@ -1186,7 +1186,6 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	return LIST_OK;
 
   ffail:
-	free( tuid );
 	free( msgid );
 	return LIST_BAD;
 }
