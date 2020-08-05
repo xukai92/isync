@@ -59,6 +59,11 @@ typedef struct store_conf {
 #define M_RECENT       (1<<0) /* unsyncable flag; maildir_* depend on this being 1<<0 */
 #define M_DEAD         (1<<1) /* expunged */
 #define M_FLAGS        (1<<2) /* flags fetched */
+// The following are only for IMAP FETCH response parsing
+#define M_DATE         (1<<3)
+#define M_SIZE         (1<<4)
+#define M_BODY         (1<<5)
+#define M_HEADER       (1<<6)
 
 #define TUIDL 12
 

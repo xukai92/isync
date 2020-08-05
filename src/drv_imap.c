@@ -1018,7 +1018,6 @@ parse_fetched_flags( list_t *list, uchar *flags, uchar *status )
 		warn( "IMAP warning: unknown system flag %s\n", list->val );
 	  flagok: ;
 	}
-	*status |= M_FLAGS;
 	return 1;
 }
 
@@ -1074,7 +1073,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	msg_data_t *msgdata;
 	imap_cmd_t *cmdp;
 	uchar mask = 0, status = 0;
-	uint uid = 0, need_uid = 0, size = 0, msgid_len = 0;
+	uint uid = 0, size = 0, msgid_len = 0;
 	time_t date = 0;
 
 	if (!is_list( list )) {
@@ -1094,7 +1093,6 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 				error( "IMAP error: unable to parse UID\n" );
 				return LIST_BAD;
 			}
-			continue;  // This *is* the UID.
 		} else if (!strcmp( "FLAGS", name )) {
 			if (!is_list( tmp )) {
 				error( "IMAP error: unable to parse FLAGS\n" );
@@ -1102,7 +1100,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			}
 			if (!parse_fetched_flags( tmp->child, &mask, &status ))
 				return LIST_BAD;
-			continue;  // This may legitimately come without UID.
+			status |= M_FLAGS;
 		} else if (!strcmp( "INTERNALDATE", name )) {
 			if (!is_atom( tmp )) {
 				error( "IMAP error: unable to parse INTERNALDATE\n" );
@@ -1112,17 +1110,20 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 				error( "IMAP error: unable to parse INTERNALDATE format\n" );
 				return LIST_BAD;
 			}
+			status |= M_DATE;
 		} else if (!strcmp( "RFC822.SIZE", name )) {
 			if (!is_atom( tmp ) || (size = strtoul( tmp->val, &ep, 10 ), *ep)) {
 				error( "IMAP error: unable to parse RFC822.SIZE\n" );
 				return LIST_BAD;
 			}
+			status |= M_SIZE;
 		} else if (!strcmp( "BODY[]", name ) || !strcmp( "BODY[HEADER]", name )) {
 			if (!is_atom( tmp )) {
 				error( "IMAP error: unable to parse BODY[]\n" );
 				return LIST_BAD;
 			}
 			body = tmp;
+			status |= M_BODY;
 		} else if (!strcmp( "BODY[HEADER.FIELDS", name )) {
 			if (!is_list( tmp )) {
 			  bfail:
@@ -1136,28 +1137,17 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			if (!is_atom( tmp ))
 				goto bfail;
 			parse_fetched_header( tmp->val, uid, &tuid, &msgid, &msgid_len );
+			status |= M_HEADER;
 		}
-		need_uid = 1;
 	}
 
 	if (!uid) {
-		if (need_uid) {
-			error( "IMAP error: received payload without UID\n" );
-			return LIST_BAD;
-		}
 		// Ignore async flag updates for now.
+		status &= ~(M_FLAGS | M_RECENT);
 	} else if ((cmdp = ctx->in_progress) && cmdp->param.lastuid) {
-		if (need_uid || (status & M_FLAGS)) {
-			error( "IMAP error: received extraneous data in response to UID query\n" );
-			return LIST_BAD;
-		}
 		// Workaround for server not sending UIDNEXT and/or APPENDUID.
 		ctx->uidnext = uid + 1;
-	} else if (body) {
-		if (tuid || msgid) {  // Only those that leak; ignore others.
-			error( "IMAP error: received extraneous data with full message\n" );
-			return LIST_BAD;
-		}
+	} else if (status & M_BODY) {
 		for (cmdp = ctx->in_progress; cmdp; cmdp = cmdp->next)
 			if (cmdp->param.uid == uid)
 				goto gotuid;
@@ -1171,6 +1161,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		msgdata->date = date;
 		if (status & M_FLAGS)
 			msgdata->flags = mask;
+		status &= ~(M_FLAGS | M_RECENT | M_BODY | M_DATE);
 	} else {
 		cur = nfcalloc( sizeof(*cur) );
 		*ctx->msgapp = &cur->gen;
@@ -1183,6 +1174,12 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			cur->gen.msgid = nfstrndup( msgid, msgid_len );
 		if (tuid)
 			memcpy( cur->gen.tuid, tuid, TUIDL );
+		status &= ~(M_FLAGS | M_RECENT | M_SIZE | M_HEADER);
+	}
+
+	if (status) {
+		error( "IMAP error: received extraneous data in FETCH response\n" );
+		return LIST_BAD;
 	}
 
 	return LIST_OK;
