@@ -1174,17 +1174,13 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		cur = nfcalloc( sizeof(*cur) );
 		*ctx->msgapp = &cur->gen;
 		ctx->msgapp = &cur->gen.next;
-		cur->gen.next = NULL;
 		cur->gen.uid = uid;
 		cur->gen.flags = mask;
 		cur->gen.status = status;
 		cur->gen.size = size;
-		cur->gen.srec = NULL;
 		cur->gen.msgid = msgid;
 		if (tuid)
 			memcpy( cur->gen.tuid, tuid, TUIDL );
-		else
-			cur->gen.tuid[0] = 0;
 	}
 
 	return LIST_OK;
