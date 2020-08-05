@@ -122,7 +122,7 @@ struct imap_store {
 	string_list_t *boxes; // _list results
 	char listed; // was _list already run with these flags?
 	// note that the message counts do _not_ reflect stats from msgs,
-	// but mailbox totals. also, don't trust them beyond the initial load.
+	// but mailbox totals.
 	int total_msgs, recent_msgs;
 	uint uidvalidity, uidnext;
 	message_t *msgs;
@@ -1514,6 +1514,8 @@ imap_socket_read( void *aux )
 			} else if ((arg1 = next_arg( &cmd ))) {
 				if (!strcmp( "EXISTS", arg1 ))
 					ctx->total_msgs = atoi( arg );
+				else if (!strcmp( "EXPUNGE", arg1 ))
+					ctx->total_msgs--;
 				else if (!strcmp( "RECENT", arg1 ))
 					ctx->recent_msgs = atoi( arg );
 				else if(!strcmp ( "FETCH", arg1 )) {
@@ -3157,10 +3159,18 @@ imap_find_new_msgs_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 		imap_find_new_msgs_p4( ctx, gcmd, response );
 		return;
 	}
-	if (!ctx->uidnext) {
-		// We are assuming that the new messages were not in fact instantly deleted.
-		error( "IMAP error: re-querying server for highest UID failed\n" );
-		imap_find_new_msgs_p4( ctx, gcmd, RESP_NO );
+	if (ctx->uidnext <= cmdp->uid) {
+		if (!ctx->uidnext && ctx->total_msgs) {
+			error( "IMAP error: re-querying server for highest UID failed\n" );
+			imap_find_new_msgs_p4( ctx, gcmd, RESP_NO );
+		} else {
+			// The messages evaporated, or the server just didn't register them -
+			// we'll catch that later (via lost TUIDs).
+			// This case is why we do the extra roundtrip instead of simply passing
+			// '*' as the end of the range below - IMAP ranges are unordered, so we
+			// would potentially re-fetch an already loaded message.
+			imap_find_new_msgs_p4( ctx, gcmd, RESP_OK );
+		}
 		return;
 	}
 	INIT_IMAP_CMD(imap_cmd_find_new_t, cmd, cmdp->callback, cmdp->callback_aux)
