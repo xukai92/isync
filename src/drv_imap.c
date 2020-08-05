@@ -1023,7 +1023,7 @@ parse_fetched_flags( list_t *list, uchar *flags, uchar *status )
 }
 
 static void
-parse_fetched_header( char *val, uint uid, char **tuid, char **msgid )
+parse_fetched_header( char *val, uint uid, char **tuid, char **msgid, uint *msgid_len )
 {
 	char *end;
 	int off, in_msgid = 0;
@@ -1059,7 +1059,8 @@ parse_fetched_header( char *val, uint uid, char **tuid, char **msgid )
 			in_msgid = 1;
 			continue;
 		}
-		*msgid = nfstrndup( val + off, (size_t)(len - off) );
+		*msgid = val + off;
+		*msgid_len = (uint)(len - off);
 		in_msgid = 0;
 	}
 }
@@ -1073,7 +1074,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	msg_data_t *msgdata;
 	imap_cmd_t *cmdp;
 	uchar mask = 0, status = 0;
-	uint uid = 0, need_uid = 0, size = 0;
+	uint uid = 0, need_uid = 0, size = 0, msgid_len = 0;
 	time_t date = 0;
 
 	if (!is_list( list )) {
@@ -1084,49 +1085,49 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	for (tmp = list->child; tmp; tmp = tmp->next) {
 		if (!is_atom( tmp )) {
 			error( "IMAP error: bogus item name in FETCH response\n" );
-			goto ffail;
+			return LIST_BAD;
 		}
 		const char *name = tmp->val;
 		tmp = tmp->next;
 		if (!strcmp( "UID", name )) {
 			if (!is_atom( tmp ) || (uid = strtoul( tmp->val, &ep, 10 ), *ep)) {
 				error( "IMAP error: unable to parse UID\n" );
-				goto ffail;
+				return LIST_BAD;
 			}
 			continue;  // This *is* the UID.
 		} else if (!strcmp( "FLAGS", name )) {
 			if (!is_list( tmp )) {
 				error( "IMAP error: unable to parse FLAGS\n" );
-				goto ffail;
+				return LIST_BAD;
 			}
 			if (!parse_fetched_flags( tmp->child, &mask, &status ))
-				goto ffail;
+				return LIST_BAD;
 			continue;  // This may legitimately come without UID.
 		} else if (!strcmp( "INTERNALDATE", name )) {
 			if (!is_atom( tmp )) {
 				error( "IMAP error: unable to parse INTERNALDATE\n" );
-				goto ffail;
+				return LIST_BAD;
 			}
 			if ((date = parse_date( tmp->val )) == -1) {
 				error( "IMAP error: unable to parse INTERNALDATE format\n" );
-				goto ffail;
+				return LIST_BAD;
 			}
 		} else if (!strcmp( "RFC822.SIZE", name )) {
 			if (!is_atom( tmp ) || (size = strtoul( tmp->val, &ep, 10 ), *ep)) {
 				error( "IMAP error: unable to parse RFC822.SIZE\n" );
-				goto ffail;
+				return LIST_BAD;
 			}
 		} else if (!strcmp( "BODY[]", name ) || !strcmp( "BODY[HEADER]", name )) {
 			if (!is_atom( tmp )) {
 				error( "IMAP error: unable to parse BODY[]\n" );
-				goto ffail;
+				return LIST_BAD;
 			}
 			body = tmp;
 		} else if (!strcmp( "BODY[HEADER.FIELDS", name )) {
 			if (!is_list( tmp )) {
 			  bfail:
 				error( "IMAP error: unable to parse BODY[HEADER.FIELDS ...]\n" );
-				goto ffail;
+				return LIST_BAD;
 			}
 			tmp = tmp->next;
 			if (!is_atom( tmp ) || strcmp( tmp->val, "]" ))
@@ -1134,7 +1135,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			tmp = tmp->next;
 			if (!is_atom( tmp ))
 				goto bfail;
-			parse_fetched_header( tmp->val, uid, &tuid, &msgid );
+			parse_fetched_header( tmp->val, uid, &tuid, &msgid, &msgid_len );
 		}
 		need_uid = 1;
 	}
@@ -1142,20 +1143,20 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	if (!uid) {
 		if (need_uid) {
 			error( "IMAP error: received payload without UID\n" );
-			goto ffail;
+			return LIST_BAD;
 		}
 		// Ignore async flag updates for now.
 	} else if ((cmdp = ctx->in_progress) && cmdp->param.lastuid) {
 		if (need_uid || (status & M_FLAGS)) {
 			error( "IMAP error: received extraneous data in response to UID query\n" );
-			goto ffail;
+			return LIST_BAD;
 		}
 		// Workaround for server not sending UIDNEXT and/or APPENDUID.
 		ctx->uidnext = uid + 1;
 	} else if (body) {
 		if (tuid || msgid) {  // Only those that leak; ignore others.
 			error( "IMAP error: received extraneous data with full message\n" );
-			goto ffail;
+			return LIST_BAD;
 		}
 		for (cmdp = ctx->in_progress; cmdp; cmdp = cmdp->next)
 			if (cmdp->param.uid == uid)
@@ -1178,16 +1179,13 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		cur->gen.flags = mask;
 		cur->gen.status = status;
 		cur->gen.size = size;
-		cur->gen.msgid = msgid;
+		if (msgid)
+			cur->gen.msgid = nfstrndup( msgid, msgid_len );
 		if (tuid)
 			memcpy( cur->gen.tuid, tuid, TUIDL );
 	}
 
 	return LIST_OK;
-
-  ffail:
-	free( msgid );
-	return LIST_BAD;
 }
 
 static void
