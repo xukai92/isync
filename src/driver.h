@@ -276,7 +276,7 @@ struct driver {
 uint count_generic_messages( message_t * );
 void free_generic_messages( message_t * );
 
-void parse_generic_store( store_conf_t *store, conffile_t *cfg );
+void parse_generic_store( store_conf_t *store, conffile_t *cfg, const char *type );
 
 store_t *proxy_alloc_store( store_t *real_ctx, const char *label );
 

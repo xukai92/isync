@@ -425,7 +425,8 @@ load_config( const char *where )
 					if (*++p)
 						channel->boxes[fn] = nfstrdup( p );
 				} else if (!getopt_helper( &cfile, &cops, channel )) {
-					error( "%s:%d: unknown keyword '%s'\n", cfile.file, cfile.line, cfile.cmd );
+					error( "%s:%d: keyword '%s' is not recognized in Channel sections\n",
+					       cfile.file, cfile.line, cfile.cmd );
 					cfile.err = 1;
 				}
 			}
@@ -476,7 +477,7 @@ load_config( const char *where )
 				}
 				else
 				{
-					error( "%s:%d: unknown keyword '%s'\n",
+					error( "%s:%d: keyword '%s' is not recognized in Group sections\n",
 					       cfile.file, cfile.line, cfile.cmd );
 					cfile.err = 1;
 				}
@@ -511,7 +512,7 @@ load_config( const char *where )
 		}
 		else if (!getopt_helper( &cfile, &gcops, &global_conf ))
 		{
-			error( "%s:%d: unknown section keyword '%s'\n",
+			error( "%s:%d: '%s' is not a recognized section-starting or global keyword\n",
 			       cfile.file, cfile.line, cfile.cmd );
 			cfile.err = 1;
 			while (getcline( &cfile ))

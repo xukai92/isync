@@ -3529,10 +3529,11 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				}
 				store->delimiter = cfg->val[0];
 			} else
-				parse_generic_store( &store->gen, cfg );
+				parse_generic_store( &store->gen, cfg, "IMAPStore" );
 			continue;
 		} else {
-			error( "%s:%d: unknown/misplaced keyword '%s'\n", cfg->file, cfg->line, cfg->cmd );
+			error( "%s:%d: keyword '%s' is not recognized in IMAPAccount sections\n",
+			       cfg->file, cfg->line, cfg->cmd );
 			cfg->err = 1;
 			continue;
 		}

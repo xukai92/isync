@@ -1913,7 +1913,7 @@ maildir_parse_store( conffile_t *cfg, store_conf_t **storep )
 				cfg->err = 1;
 			}
 		} else
-			parse_generic_store( &store->gen, cfg );
+			parse_generic_store( &store->gen, cfg, "MaildirStore" );
 	if (!store->inbox)
 		store->inbox = expand_strdup( "~/Maildir" );
 	if (store->sub_style == SUB_MAILDIRPP && store->gen.path) {
