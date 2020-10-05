@@ -119,9 +119,9 @@ and literal double quotes and backslashes (\fB\\\fR) must be backslash-escaped.
 All keywords (including those used as arguments) are case-insensitive.
 Bash-like home directory expansion using the tilde (\fB~\fR) is supported
 in all options which represent local paths.
-There are a few global options, the rest applies to particular sections.
-Sections are started by a section keyword and are terminated by an empty line
-or end of file.
+There are a few global options, the others apply to particular sections.
+Sections begin with a section-starting keyword and are terminated by an empty
+line or end of file.
 Every section defines an object with an identifier unique within that
 object class.
 .P
@@ -130,8 +130,8 @@ a collection of mailboxes; basically a folder, either local or remote.
 A Channel connects two Stores, describing the way the two are synchronized.
 .br
 There are two auxiliary object classes: Accounts and Groups. An Account
-describes the connection part of remote Stores, so a server connection can be
-shared between multiple Stores. A Group aggregates multiple Channels to
+describes the connection part of network Stores, so server configurations can
+be shared between multiple Stores. A Group aggregates multiple Channels to
 save typing on the command line.
 .P
 File system locations (in particular, \fBPath\fR and \fBInbox\fR) use the
@@ -156,7 +156,7 @@ The location of the Store in the (server's) file system.
 If this is no absolute path, the reference point is Store type specific.
 This string is prepended to the mailbox names addressed in this Store,
 but is not considered part of them; this is important for \fBPatterns\fR
-in the Channels section.
+and \fBCreate\fR in the Channels section.
 Note that you \fBmust\fR append a slash if you want to specify an entire
 directory.
 (Default: none)
