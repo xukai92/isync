@@ -431,7 +431,7 @@ main( int argc, char **argv )
 	channel_conf_t *chan;
 	string_list_t *channame;
 	char *config = NULL, *opt, *ochar;
-	int oind, cops = 0, op, ops[2] = { 0, 0 }, pseudo = 0, ms_warn = 0;
+	int oind, cops = 0, op, ops[2] = { 0, 0 }, ms_warn = 0;
 
 	tzset();
 	gethostname( Hostname, sizeof(Hostname) );
@@ -595,10 +595,6 @@ main( int argc, char **argv )
 			mvars->list = 1;
 			break;
 		case 'c':
-			if (*ochar == 'T') {
-				ochar++;
-				pseudo = 1;
-			}
 			if (oind >= argc) {
 				error( "-c requires an argument.\n" );
 				return 1;
@@ -747,7 +743,7 @@ main( int argc, char **argv )
 	if (merge_ops( cops, ops ))
 		return 1;
 
-	if (load_config( config, pseudo ))
+	if (load_config( config ))
 		return 1;
 
 	if (!channels) {

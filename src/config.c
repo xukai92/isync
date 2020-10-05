@@ -317,7 +317,7 @@ merge_ops( int cops, int ops[] )
 }
 
 int
-load_config( const char *where, int pseudo )
+load_config( const char *where )
 {
 	conffile_t cfile;
 	store_conf_t *store, **storeapp = &stores;
@@ -331,14 +331,12 @@ load_config( const char *where, int pseudo )
 	char buf[1024];
 
 	if (!where) {
-		assert( !pseudo );
 		nfsnprintf( path, sizeof(path), "%s/." EXE "rc", Home );
 		cfile.file = path;
 	} else
 		cfile.file = where;
 
-	if (!pseudo)
-		info( "Reading configuration file %s\n", cfile.file );
+	info( "Reading configuration file %s\n", cfile.file );
 
 	if (!(cfile.fp = fopen( cfile.file, "r" ))) {
 		sys_error( "Cannot open config file '%s'", cfile.file );
@@ -525,7 +523,5 @@ load_config( const char *where, int pseudo )
 	cfile.err |= merge_ops( gcops, global_conf.ops );
 	if (!global_conf.sync_state)
 		global_conf.sync_state = expand_strdup( "~/." EXE "/" );
-	if (!cfile.err && pseudo)
-		unlink( where );
 	return cfile.err;
 }
