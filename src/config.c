@@ -326,7 +326,7 @@ load_config( const char *where )
 	string_list_t *chanlist, **chanlistapp;
 	char *arg, *p;
 	uint len, max_size;
-	int cops, gcops, fn, i;
+	int cops, gcops, glob_ok, fn, i;
 	char path[_POSIX_PATH_MAX];
 	char buf[1024];
 
@@ -351,6 +351,7 @@ load_config( const char *where )
 	cfile.rest = NULL;
 
 	gcops = 0;
+	glob_ok = 1;
 	global_conf.expire_unread = -1;
   reloop:
 	while (getcline( &cfile )) {
@@ -367,6 +368,7 @@ load_config( const char *where )
 					storeapp = &store->next;
 					*storeapp = NULL;
 				}
+				glob_ok = 0;
 				goto reloop;
 			}
 		if (!strcasecmp( "Channel", cfile.cmd ))
@@ -444,6 +446,8 @@ load_config( const char *where )
 				*channelapp = channel;
 				channelapp = &channel->next;
 			}
+			glob_ok = 0;
+			goto reloop;
 		}
 		else if (!strcasecmp( "Group", cfile.cmd ))
 		{
@@ -477,6 +481,8 @@ load_config( const char *where )
 					cfile.err = 1;
 				}
 			}
+			glob_ok = 0;
+			goto reloop;
 		}
 		else if (!strcasecmp( "FSync", cfile.cmd ))
 		{
@@ -512,6 +518,11 @@ load_config( const char *where )
 				if (!cfile.cmd)
 					goto reloop;
 			break;
+		}
+		if (!glob_ok) {
+			error( "%s:%d: global options may not follow sections\n",
+			       cfile.file, cfile.line );
+			cfile.err = 1;
 		}
 	}
 	fclose (cfile.fp);
