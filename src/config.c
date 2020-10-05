@@ -463,9 +463,7 @@ load_config( const char *where )
 				chanlistapp = &chanlist->next;
 				*chanlistapp = NULL;
 			}
-			while (getcline( &cfile )) {
-				if (!cfile.cmd)
-					goto reloop;
+			while (getcline( &cfile ) && cfile.cmd) {
 				if (!strcasecmp( "Channel", cfile.cmd ) ||
 				    !strcasecmp( "Channels", cfile.cmd ))
 				{
@@ -479,7 +477,6 @@ load_config( const char *where )
 					cfile.err = 1;
 				}
 			}
-			break;
 		}
 		else if (!strcasecmp( "FSync", cfile.cmd ))
 		{
