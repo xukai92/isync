@@ -3333,19 +3333,21 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 
 	if (!strcasecmp( "IMAPAccount", cfg->cmd )) {
 		server = nfcalloc( sizeof(*server) );
-		server->name = nfstrdup( cfg->val );
+		name = server->name = nfstrdup( cfg->val );
 		*serverapp = server;
 		serverapp = &server->next;
 		store = NULL;
 		*storep = NULL;
+		type = "IMAP account";
 	} else if (!strcasecmp( "IMAPStore", cfg->cmd )) {
 		store = nfcalloc( sizeof(*store) );
 		store->gen.driver = &imap_driver;
-		store->gen.name = nfstrdup( cfg->val );
+		name = store->gen.name = nfstrdup( cfg->val );
 		store->use_namespace = 1;
 		*storep = &store->gen;
 		memset( &sserver, 0, sizeof(sserver) );
 		server = &sserver;
+		type = "IMAP store";
 	} else
 		return 0;
 
@@ -3539,10 +3541,6 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		}
 		acc_opt = 1;
 	}
-	if (store)
-		type = "IMAP store", name = store->gen.name;
-	else
-		type = "IMAP account", name = server->name;
 	if (!store || !store->server) {
 		if (!server->sconf.tunnel && !server->sconf.host) {
 			error( "%s '%s' has neither Tunnel nor Host\n", type, name );
