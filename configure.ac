@@ -220,7 +220,7 @@ if test "x$have_macos_keychain" != xno; then
     fi
     have_macos_keychain=yes
     AC_DEFINE(HAVE_MACOS_KEYCHAIN, 1, [Define to 1 if you have the macOS Keychain Services API.])
-    AC_SUBST(KEYCHAIN_LIBS, ["-Wl,-framework,Security"])
+    AC_SUBST(KEYCHAIN_LIBS, ["-Wl,-framework,Security,-framework,CoreFoundation"])
 fi
 
 AC_CONFIG_FILES([Makefile src/Makefile isync.spec])
