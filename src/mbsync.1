@@ -326,10 +326,13 @@ Specify the login name on the IMAP server.
 \fBUserCmd\fR [\fB+\fR]\fIcommand\fR
 Specify a shell command to obtain a user rather than specifying a
 user directly. This allows you to script retrieving user names.
+.br
 The command must produce exactly one line on stdout; the trailing newline
 is optional.
 Prepend \fB+\fR to the command to indicate that it produces TTY output
 (e.g., a prompt); failure to do so will merely produce messier output.
+Remember to backslash-escape double quotes and backslashes embedded into
+the command.
 .
 .TP
 \fBPass\fR \fIpassword\fR
@@ -342,11 +345,8 @@ configuration file, \fBmbsync\fR will prompt you for a password.
 \fBPassCmd\fR [\fB+\fR]\fIcommand\fR
 Specify a shell command to obtain a password rather than specifying a
 password directly. This allows you to use password files and agents.
-The command must produce exactly one line on stdout; the trailing newline is
-optional.
-Prepend \fB+\fR to the command to indicate that it produces TTY output
-(e.g., a decryption password prompt); failure to do so will merely produce
-messier output.
+.br
+See \fBUserCmd\fR above for details.
 .
 .TP
 \fBUseKeychain\fR \fByes\fR|\fBno\fR
