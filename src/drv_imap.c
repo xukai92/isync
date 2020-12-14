@@ -3675,7 +3675,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 static uint
 imap_get_caps( store_t *gctx ATTR_UNUSED )
 {
-	return DRV_CRLF | DRV_VERBOSE;
+	return DRV_CRLF | DRV_VERBOSE | DRV_ASYNC;
 }
 
 struct driver imap_driver = {

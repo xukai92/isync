@@ -713,6 +713,9 @@ main( int argc, char **argv )
 		case 'T':
 			for (; *ochar; ) {
 				switch (*ochar++) {
+				case 'a':
+					DFlags |= FORCEASYNC;
+					break;
 				case 'j':
 					DFlags |= KEEPJOURNAL;
 					JLimit = strtol( ochar, &ochar, 10 );
@@ -861,20 +864,23 @@ sync_chans( main_vars_t *mvars, int ent )
 		if (mvars->skip)
 			goto next2;
 		mvars->state[F] = mvars->state[N] = ST_FRESH;
-		if ((DFlags & DEBUG_DRV) || (mvars->chan->stores[F]->driver->get_caps( NULL ) & mvars->chan->stores[N]->driver->get_caps( NULL ) & DRV_VERBOSE))
+		uint dcaps[2];
+		for (t = 0; t < 2; t++) {
+			mvars->drv[t] = mvars->chan->stores[t]->driver;
+			dcaps[t] = mvars->drv[t]->get_caps( NULL );
+		}
+		if ((DFlags & DEBUG_DRV) || (dcaps[F] & dcaps[N] & DRV_VERBOSE))
 			labels[F] = "F: ", labels[N] = "N: ";
 		else
 			labels[F] = labels[N] = "";
 		for (t = 0; t < 2; t++) {
-			driver_t *drv = mvars->chan->stores[t]->driver;
-			store_t *ctx = drv->alloc_store( mvars->chan->stores[t], labels[t] );
-			if (DFlags & DEBUG_DRV) {
-				drv = &proxy_driver;
+			store_t *ctx = mvars->drv[t]->alloc_store( mvars->chan->stores[t], labels[t] );
+			if ((DFlags & DEBUG_DRV) || ((DFlags & FORCEASYNC) && !(dcaps[t] & DRV_ASYNC))) {
+				mvars->drv[t] = &proxy_driver;
 				ctx = proxy_alloc_store( ctx, labels[t] );
 			}
-			mvars->drv[t] = drv;
 			mvars->ctx[t] = ctx;
-			drv->set_bad_callback( ctx, store_bad, AUX );
+			mvars->drv[t]->set_bad_callback( ctx, store_bad, AUX );
 		}
 		for (t = 0; ; t++) {
 			info( "Opening %s store %s...\n", str_fn[t], mvars->chan->stores[t]->name );

@@ -21,8 +21,11 @@
 
 #include "driver.h"
 
+#include <assert.h>
 #include <limits.h>
 #include <stdlib.h>
+
+typedef struct gen_cmd gen_cmd_t;
 
 typedef union proxy_store {
 	store_t gen;
@@ -32,6 +35,9 @@ typedef union proxy_store {
 		uint ref_count;
 		driver_t *real_driver;
 		store_t *real_store;
+		gen_cmd_t *done_cmds, **done_cmds_append;
+		gen_cmd_t *check_cmds, **check_cmds_append;
+		wakeup_t wakeup;
 
 		void (*bad_callback)( void *aux );
 		void *bad_callback_aux;
@@ -78,8 +84,10 @@ proxy_make_flags( uchar flags, char *buf )
 static void
 proxy_store_deref( proxy_store_t *ctx )
 {
-	if (!--ctx->ref_count)
+	if (!--ctx->ref_count) {
+		assert( !pending_wakeup( &ctx->wakeup ) );
 		free( ctx );
+	}
 }
 
 static int curr_tag;
@@ -87,11 +95,24 @@ static int curr_tag;
 #define GEN_CMD \
 	uint ref_count; \
 	int tag; \
-	proxy_store_t *ctx;
+	proxy_store_t *ctx; \
+	gen_cmd_t *next; \
+	void (*queued_cb)( gen_cmd_t *gcmd );
 
-typedef struct {
+struct gen_cmd {
 	GEN_CMD
-} gen_cmd_t;
+};
+
+#define GEN_STS_CMD \
+	GEN_CMD \
+	int sts;
+
+typedef union {
+	gen_cmd_t gen;
+	struct {
+		GEN_STS_CMD
+	};
+} gen_sts_cmd_t;
 
 static gen_cmd_t *
 proxy_cmd_new( proxy_store_t *ctx, uint sz )
@@ -110,6 +131,67 @@ proxy_cmd_done( gen_cmd_t *cmd )
 	if (!--cmd->ref_count) {
 		proxy_store_deref( cmd->ctx );
 		free( cmd );
+	}
+}
+
+static void
+proxy_wakeup( void *aux )
+{
+	proxy_store_t *ctx = (proxy_store_t *)aux;
+
+	gen_cmd_t *cmd = ctx->done_cmds;
+	assert( cmd );
+	if (!(ctx->done_cmds = cmd->next))
+		ctx->done_cmds_append = &ctx->done_cmds;
+	else
+		conf_wakeup( &ctx->wakeup, 0 );
+	cmd->queued_cb( cmd );
+	proxy_cmd_done( cmd );
+}
+
+static void
+proxy_invoke_cb( gen_cmd_t *cmd, void (*cb)( gen_cmd_t * ), int checked, const char *name )
+{
+	if (DFlags & FORCEASYNC) {
+		debug( "%s[% 2d] Callback queue %s%s\n", cmd->ctx->label, cmd->tag, name, checked ? " (checked)" : "" );
+		cmd->queued_cb = cb;
+		cmd->next = NULL;
+		if (checked) {
+			*cmd->ctx->check_cmds_append = cmd;
+			cmd->ctx->check_cmds_append = &cmd->next;
+		} else {
+			*cmd->ctx->done_cmds_append = cmd;
+			cmd->ctx->done_cmds_append = &cmd->next;
+			conf_wakeup( &cmd->ctx->wakeup, 0 );
+		}
+	} else {
+		cb( cmd );
+		proxy_cmd_done( cmd );
+	}
+}
+
+static void
+proxy_flush_checked_cmds( proxy_store_t *ctx )
+{
+	if (ctx->check_cmds) {
+		*ctx->done_cmds_append = ctx->check_cmds;
+		ctx->done_cmds_append = ctx->check_cmds_append;
+		ctx->check_cmds_append = &ctx->check_cmds;
+		ctx->check_cmds = NULL;
+		conf_wakeup( &ctx->wakeup, 0 );
+	}
+}
+
+static void
+proxy_cancel_checked_cmds( proxy_store_t *ctx )
+{
+	gen_cmd_t *cmd;
+
+	while ((cmd = ctx->check_cmds)) {
+		if (!(ctx->check_cmds = cmd->next))
+			ctx->check_cmds_append = &ctx->check_cmds;
+		((gen_sts_cmd_t *)cmd)->sts = DRV_CANCELED;
+		cmd->queued_cb( cmd );
 	}
 }
 
@@ -155,9 +237,10 @@ static @type@proxy_@name@( store_t *gctx@decl_args@ )
 
 //# TEMPLATE CALLBACK
 typedef union {
-	gen_cmd_t gen;
+	@gen_cmd_t@ gen;
 	struct {
-		GEN_CMD
+		@GEN_CMD@
+		@decl_cb_state@
 		void (*callback)( @decl_cb_args@void *aux );
 		void *callback_aux;
 		@decl_state@
@@ -165,16 +248,24 @@ typedef union {
 } @name@_cmd_t;
 
 static void
-proxy_@name@_cb( @decl_cb_args@void *aux )
+proxy_do_@name@_cb( gen_cmd_t *gcmd )
 {
-	@name@_cmd_t *cmd = (@name@_cmd_t *)aux;
+	@name@_cmd_t *cmd = (@name@_cmd_t *)gcmd;
 
 	@pre_print_cb_args@
 	debug( "%s[% 2d] Callback enter @name@@print_fmt_cb_args@\n", cmd->ctx->label, cmd->tag@print_pass_cb_args@ );
 	@print_cb_args@
 	cmd->callback( @pass_cb_args@cmd->callback_aux );
 	debug( "%s[% 2d] Callback leave @name@\n", cmd->ctx->label, cmd->tag );
-	proxy_cmd_done( &cmd->gen );
+}
+
+static void
+proxy_@name@_cb( @decl_cb_args@void *aux )
+{
+	@name@_cmd_t *cmd = (@name@_cmd_t *)aux;
+
+	@save_cb_args@
+	proxy_invoke_cb( @gen_cmd@, proxy_do_@name@_cb, @checked@, "@name@" );
 }
 
 static @type@proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), void *aux )
@@ -190,15 +281,15 @@ static @type@proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@v
 	@print_args@
 	ctx->real_driver->@name@( ctx->real_store@pass_args@, proxy_@name@_cb, cmd );
 	debug( "%s[% 2d] Leave @name@\n", ctx->label, cmd->tag );
-	proxy_cmd_done( &cmd->gen );
+	proxy_cmd_done( @gen_cmd@ );
 }
 //# END
 
 //# UNDEFINE list_store_print_fmt_cb_args
 //# UNDEFINE list_store_print_pass_cb_args
 //# DEFINE list_store_print_cb_args
-	if (sts == DRV_OK) {
-		for (string_list_t *box = boxes; box; box = box->next)
+	if (cmd->sts == DRV_OK) {
+		for (string_list_t *box = cmd->boxes; box; box = box->next)
 			debug( "  %s\n", box->string );
 	}
 //# END
@@ -217,21 +308,21 @@ static @type@proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@v
 	}
 //# END
 //# DEFINE load_box_print_fmt_cb_args , sts=%d, total=%d, recent=%d
-//# DEFINE load_box_print_pass_cb_args , sts, total_msgs, recent_msgs
+//# DEFINE load_box_print_pass_cb_args , cmd->sts, cmd->total_msgs, cmd->recent_msgs
 //# DEFINE load_box_print_cb_args
-	if (sts == DRV_OK) {
+	if (cmd->sts == DRV_OK) {
 		static char fbuf[as(Flags) + 1];
-		for (message_t *msg = msgs; msg; msg = msg->next)
+		for (message_t *msg = cmd->msgs; msg; msg = msg->next)
 			debug( "  uid=%-5u flags=%-4s size=%-6u tuid=%." stringify(TUIDL) "s\n",
 			       msg->uid, (msg->status & M_FLAGS) ? (proxy_make_flags( msg->flags, fbuf ), fbuf) : "?", msg->size, *msg->tuid ? msg->tuid : "?" );
 	}
 //# END
 
 //# DEFINE find_new_msgs_print_fmt_cb_args , sts=%d
-//# DEFINE find_new_msgs_print_pass_cb_args , sts
+//# DEFINE find_new_msgs_print_pass_cb_args , cmd->sts
 //# DEFINE find_new_msgs_print_cb_args
-	if (sts == DRV_OK) {
-		for (message_t *msg = msgs; msg; msg = msg->next)
+	if (cmd->sts == DRV_OK) {
+		for (message_t *msg = cmd->msgs; msg; msg = msg->next)
 			debug( "  uid=%-5u tuid=%." stringify(TUIDL) "s\n", msg->uid, msg->tuid );
 	}
 //# END
@@ -251,7 +342,7 @@ static @type@proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@v
 //# DEFINE fetch_msg_print_fmt_cb_args , flags=%s, date=%lld, size=%u
 //# DEFINE fetch_msg_print_pass_cb_args , fbuf, (long long)cmd->data->date, cmd->data->len
 //# DEFINE fetch_msg_print_cb_args
-	if (sts == DRV_OK && (DFlags & DEBUG_DRV_ALL)) {
+	if (cmd->sts == DRV_OK && (DFlags & DEBUG_DRV_ALL)) {
 		printf( "%s=========\n", cmd->ctx->label );
 		fwrite( cmd->data->data, cmd->data->len, 1, stdout );
 		printf( "%s=========\n", cmd->ctx->label );
@@ -281,14 +372,29 @@ static @type@proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@v
 //# END
 //# DEFINE set_msg_flags_print_fmt_args , uid=%u, add=%s, del=%s
 //# DEFINE set_msg_flags_print_pass_args , uid, fbuf1, fbuf2
+//# DEFINE set_msg_flags_checked sts == DRV_OK
 
 //# DEFINE trash_msg_print_fmt_args , uid=%u
 //# DEFINE trash_msg_print_pass_args , msg->uid
 
+//# DEFINE commit_cmds_print_args
+	proxy_flush_checked_cmds( ctx );
+//# END
+
+//# DEFINE cancel_cmds_print_cb_args
+	proxy_cancel_checked_cmds( cmd->ctx );
+//# END
+
+//# DEFINE free_store_print_args
+	proxy_cancel_checked_cmds( ctx );
+//# END
 //# DEFINE free_store_action
 	proxy_store_deref( ctx );
 //# END
 
+//# DEFINE cancel_store_print_args
+	proxy_cancel_checked_cmds( ctx );
+//# END
 //# DEFINE cancel_store_action
 	proxy_store_deref( ctx );
 //# END
@@ -325,9 +431,12 @@ proxy_alloc_store( store_t *real_ctx, const char *label )
 	ctx->gen.conf = real_ctx->conf;
 	ctx->ref_count = 1;
 	ctx->label = label;
+	ctx->done_cmds_append = &ctx->done_cmds;
+	ctx->check_cmds_append = &ctx->check_cmds;
 	ctx->real_driver = real_ctx->driver;
 	ctx->real_store = real_ctx;
 	ctx->real_driver->set_bad_callback( ctx->real_store, (void (*)(void *))proxy_invoke_bad_callback, ctx );
+	init_wakeup( &ctx->wakeup, proxy_wakeup, ctx );
 	return &ctx->gen;
 }
 

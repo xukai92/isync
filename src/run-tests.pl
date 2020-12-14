@@ -334,10 +334,10 @@ sub killcfg()
 	unlink ".mbsyncrc";
 }
 
-# $options
-sub runsync($$)
+# $run_async, $mbsync_options, $log_file
+sub runsync($$$)
 {
-	my ($flags, $file) = @_;
+	my ($async, $flags, $file) = @_;
 
 	my $cmd;
 	if ($use_vg) {
@@ -345,6 +345,7 @@ sub runsync($$)
 	} else {
 		$flags .= " -D";
 	}
+	$flags .= " -Ta" if ($async);
 	$cmd .= "$mbsync -Tz $flags -c .mbsyncrc test";
 	open FILE, "$cmd 2>&1 |";
 	my @out = <FILE>;
@@ -477,7 +478,7 @@ sub show($$$)
 	showchan("near/.mbsyncstate");
 	print ");\n";
 	&writecfg(@sfx);
-	runsync("", "");
+	runsync(0, "", "");
 	killcfg();
 	print "my \@X$tx = (\n";
 	showchan("near/.mbsyncstate");
@@ -681,18 +682,14 @@ sub readfile($)
 	return @nj;
 }
 
-# $title, \@source_state, \@target_state, @channel_configs
-sub test($$$@)
+# $run_async, \@source_state, \@target_state, @channel_configs
+sub test_impl($$$@)
 {
-	my ($ttl, $sx, $tx, @sfx) = @_;
-
-	return 0 if (scalar(@ARGV) && !grep { $_ eq $ttl } @ARGV);
-	print "Testing: ".$ttl." ...\n";
-	&writecfg(@sfx);
+	my ($async, $sx, $tx, @sfx) = @_;
 
 	mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 
-	my ($xc, @ret) = runsync("-Tj", "1-initial.log");
+	my ($xc, @ret) = runsync($async, "-Tj", "1-initial.log");
 	if ($xc || ckchan("near/.mbsyncstate.new", $tx)) {
 		print "Input:\n";
 		printchan($sx);
@@ -710,7 +707,7 @@ sub test($$$@)
 	}
 
 	my @nj = readfile("near/.mbsyncstate.journal");
-	my ($jxc, @jret) = runsync("-0 --no-expunge", "2-replay.log");
+	my ($jxc, @jret) = runsync($async, "-0 --no-expunge", "2-replay.log");
 	if ($jxc || ckstate("near/.mbsyncstate", @{ $$tx[2] })) {
 		print "Journal replay failed.\n";
 		print "Options:\n";
@@ -729,7 +726,7 @@ sub test($$$@)
 		exit 1;
 	}
 
-	my ($ixc, @iret) = runsync("", "3-verify.log");
+	my ($ixc, @iret) = runsync($async, "", "3-verify.log");
 	if ($ixc || ckchan("near/.mbsyncstate", $tx)) {
 		print "Idempotence verification run failed.\n";
 		print "Input == Expected result:\n";
@@ -752,7 +749,7 @@ sub test($$$@)
 	for (my $l = 1; $l <= $njl; $l++) {
 		mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 
-		my ($nxc, @nret) = runsync("-Tj$l", "4-interrupt.log");
+		my ($nxc, @nret) = runsync($async, "-Tj$l", "4-interrupt.log");
 		if ($nxc != (100 + ($l & 1)) << 8) {
 			print "Interrupting at step $l/$njl failed.\n";
 			print "Debug output:\n";
@@ -760,7 +757,7 @@ sub test($$$@)
 			exit 1;
 		}
 
-		($nxc, @nret) = runsync("-Tj", "5-resume.log");
+		($nxc, @nret) = runsync($async, "-Tj", "5-resume.log");
 		if ($nxc || ckchan("near/.mbsyncstate.new", $tx)) {
 			print "Resuming from step $l/$njl failed.\n";
 			print "Input:\n";
@@ -785,6 +782,19 @@ sub test($$$@)
 		rmtree "near";
 		rmtree "far";
 	}
+}
+
+# $title, \@source_state, \@target_state, @channel_configs
+sub test($$$@)
+{
+	my ($ttl, $sx, $tx, @sfx) = @_;
+
+	return 0 if (scalar(@ARGV) && !grep { $_ eq $ttl } @ARGV);
+	print "Testing: ".$ttl." ...\n";
+	&writecfg(@sfx);
+
+	test_impl(0, $sx, $tx, @sfx);
+	test_impl(1, $sx, $tx, @sfx);
 
 	killcfg();
 }

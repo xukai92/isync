@@ -127,6 +127,9 @@ typedef struct {
 #define DRV_CANCELED    4
 
 /* All memory belongs to the driver's user, unless stated otherwise. */
+// If the driver is NOT DRV_ASYNC, memory owned by the driver returned
+// through callbacks MUST remain valid until a related subsequent command
+// is invoked, as the proxy driver may deliver these pointers with delay.
 
 /*
    This flag says that the driver CAN store messages with CRLFs,
@@ -138,6 +141,10 @@ typedef struct {
    This flag says that the driver will act upon (DFlags & VERBOSE).
 */
 #define DRV_VERBOSE     2
+/*
+   This flag says that the driver operates asynchronously.
+*/
+#define DRV_ASYNC       4
 
 #define LIST_INBOX      1
 #define LIST_PATH       2

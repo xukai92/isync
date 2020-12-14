@@ -107,6 +107,7 @@ typedef unsigned long ulong;
 #define VERBOSE         0x800
 #define KEEPJOURNAL     0x1000
 #define ZERODELAY       0x2000
+#define FORCEASYNC      0x4000
 
 extern int DFlags;
 extern int JLimit;
