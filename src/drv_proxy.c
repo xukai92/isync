@@ -216,13 +216,11 @@ static @type@proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@v
 		debug( "\n" );
 	}
 //# END
-//# DEFINE load_box_pre_print_cb_args
-	static char fbuf[as(Flags) + 1];
-//# END
 //# DEFINE load_box_print_fmt_cb_args , sts=%d, total=%d, recent=%d
 //# DEFINE load_box_print_pass_cb_args , sts, total_msgs, recent_msgs
 //# DEFINE load_box_print_cb_args
 	if (sts == DRV_OK) {
+		static char fbuf[as(Flags) + 1];
 		for (message_t *msg = msgs; msg; msg = msg->next)
 			debug( "  uid=%-5u flags=%-4s size=%-6u tuid=%." stringify(TUIDL) "s\n",
 			       msg->uid, (msg->status & M_FLAGS) ? (proxy_make_flags( msg->flags, fbuf ), fbuf) : "?", msg->size, *msg->tuid ? msg->tuid : "?" );
