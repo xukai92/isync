@@ -76,7 +76,7 @@ typedef unsigned long ulong;
 # define DIAG_DISABLE(text)
 #endif
 
-#if __GNUC__ >= 7
+#if __GNUC__ >= 7 || defined(__clang__)
 # define FALLTHROUGH __attribute__((fallthrough));
 #else
 # define FALLTHROUGH
