@@ -345,7 +345,7 @@ sub runsync($$)
 	} else {
 		$flags .= " -D";
 	}
-	$cmd .= "$mbsync -Z $flags -c .mbsyncrc test";
+	$cmd .= "$mbsync -Tz $flags -c .mbsyncrc test";
 	open FILE, "$cmd 2>&1 |";
 	my @out = <FILE>;
 	close FILE or push(@out, $! ? "*** error closing mbsync: $!\n" : "*** mbsync exited with signal ".($?&127).", code ".($?>>8)."\n");
@@ -692,7 +692,7 @@ sub test($$$@)
 
 	mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 
-	my ($xc, @ret) = runsync("-J", "1-initial.log");
+	my ($xc, @ret) = runsync("-Tj", "1-initial.log");
 	if ($xc || ckchan("near/.mbsyncstate.new", $tx)) {
 		print "Input:\n";
 		printchan($sx);
@@ -752,7 +752,7 @@ sub test($$$@)
 	for (my $l = 1; $l <= $njl; $l++) {
 		mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 
-		my ($nxc, @nret) = runsync("-J$l", "4-interrupt.log");
+		my ($nxc, @nret) = runsync("-Tj$l", "4-interrupt.log");
 		if ($nxc != (100 + ($l & 1)) << 8) {
 			print "Interrupting at step $l/$njl failed.\n";
 			print "Debug output:\n";
@@ -760,7 +760,7 @@ sub test($$$@)
 			exit 1;
 		}
 
-		($nxc, @nret) = runsync("-J", "5-resume.log");
+		($nxc, @nret) = runsync("-Tj", "5-resume.log");
 		if ($nxc || ckchan("near/.mbsyncstate.new", $tx)) {
 			print "Resuming from step $l/$njl failed.\n";
 			print "Input:\n";

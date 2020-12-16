@@ -710,12 +710,21 @@ main( int argc, char **argv )
 				op = DEBUG_ALL | VERBOSE;
 			DFlags |= op;
 			break;
-		case 'J':
-			DFlags |= KEEPJOURNAL;
-			JLimit = strtol( ochar, &ochar, 10 );
-			break;
-		case 'Z':
-			DFlags |= ZERODELAY;
+		case 'T':
+			for (; *ochar; ) {
+				switch (*ochar++) {
+				case 'j':
+					DFlags |= KEEPJOURNAL;
+					JLimit = strtol( ochar, &ochar, 10 );
+					break;
+				case 'z':
+					DFlags |= ZERODELAY;
+					break;
+				default:
+					error( "Unknown -T flag '%c'\n", *(ochar - 1) );
+					return 1;
+				}
+			}
 			break;
 		case 'v':
 			version();
