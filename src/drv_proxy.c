@@ -134,7 +134,7 @@ static @type@proxy_@name@( store_t *gctx@decl_args@ )
 //# END
 
 //# TEMPLATE REGULAR_VOID
-static void proxy_@name@( store_t *gctx@decl_args@ )
+static @type@proxy_@name@( store_t *gctx@decl_args@ )
 {
 	proxy_store_t *ctx = (proxy_store_t *)gctx;
 
@@ -168,8 +168,7 @@ proxy_@name@_cb( @decl_cb_args@void *aux )
 	proxy_cmd_done( &cmd->gen );
 }
 
-static void
-proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), void *aux )
+static @type@proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), void *aux )
 {
 	proxy_store_t *ctx = (proxy_store_t *)gctx;
 
