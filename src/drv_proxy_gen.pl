@@ -50,6 +50,7 @@ while (<$ins>) {
 			$defines{$define} = $conts;
 			$define = undef;
 		} else {
+			($_ eq "\n") or s/^\t// or die("DEFINE content is not indented: $_");
 			$conts .= $_;
 		}
 	} else {
@@ -122,6 +123,12 @@ sub make_format($)
 	return $_;
 }
 
+sub indent($$)
+{
+	my ($str, $indent) = @_;
+	return $str =~ s,^(?=.),$indent,smgr;
+}
+
 open(my $outh, ">".$out_source) or die("Cannot create $out_source: $!\n");
 
 for (@ptypes) {
@@ -161,7 +168,7 @@ for (@ptypes) {
 		$replace{$1} = $defines{$_} if (/^${cmd_name}_(.*)$/);
 	}
 	my $text = $templates{$template};
-	$text =~ s/^\h*\@(\w+)\@\n/$replace{$1} \/\/ ""/smeg;
+	$text =~ s/^(\h*)\@(\w+)\@\n/indent($replace{$2} \/\/ "", $1)/smeg;
 	$text =~ s/\@(\w+)\@/$replace{$1} \/\/ ""/eg;
 	print $outh $text."\n";
 }
