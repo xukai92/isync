@@ -31,16 +31,19 @@ typedef struct driver driver_t;
 #define FAIL_WAIT   1  /* Retry after some time (if at all) */
 #define FAIL_FINAL  2  /* Don't retry until store reconfiguration */
 
-typedef struct store_conf {
-	struct store_conf *next;
-	char *name;
-	driver_t *driver;
-	const char *path; /* should this be here? its interpretation is driver-specific */
-	const char *flat_delim;
-	const char *map_inbox;
-	const char *trash;
-	uint max_size; /* off_t is overkill */
+#define STORE_CONF \
+	struct store_conf *next; \
+	char *name; \
+	driver_t *driver; \
+	const char *path;  /* should this be here? its interpretation is driver-specific */ \
+	const char *flat_delim; \
+	const char *map_inbox; \
+	const char *trash; \
+	uint max_size;  /* off_t is overkill */ \
 	char trash_remote_new, trash_only_new;
+
+typedef struct store_conf {
+	STORE_CONF
 } store_conf_t;
 
 /* For message->flags */
@@ -67,15 +70,18 @@ typedef struct store_conf {
 
 #define TUIDL 12
 
-typedef struct message {
-	struct message *next;
-	struct sync_rec *srec;
-	char *msgid; /* owned */
-	/* string_list_t *keywords; */
-	uint size; /* zero implies "not fetched" */
-	uint uid;
-	uchar flags, status;
+#define MESSAGE(message) \
+	message *next; \
+	struct sync_rec *srec; \
+	char *msgid;  /* owned */ \
+	/* string_list_t *keywords; */ \
+	uint size;  /* zero implies "not fetched" */ \
+	uint uid; \
+	uchar flags, status; \
 	char tuid[TUIDL];
+
+typedef struct message {
+	MESSAGE(struct message)
 } message_t;
 
 // For driver_t->prepare_load_box(), which may amend the passed flags.
@@ -94,10 +100,13 @@ typedef struct message {
 
 #define UIDVAL_BAD ((uint)-1)
 
+#define STORE(store) \
+	store *next; \
+	driver_t *driver; \
+	store##_conf *conf;  /* foreign */
+
 typedef struct store {
-	struct store *next;
-	driver_t *driver;
-	store_conf_t *conf; /* foreign */
+	STORE(struct store)
 } store_t;
 
 typedef struct {

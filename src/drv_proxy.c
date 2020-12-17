@@ -24,15 +24,18 @@
 #include <limits.h>
 #include <stdlib.h>
 
-typedef struct {
+typedef union proxy_store {
 	store_t gen;
-	const char *label; // foreign
-	uint ref_count;
-	driver_t *real_driver;
-	store_t *real_store;
+	struct {
+		STORE(union proxy_store)
+		const char *label;  // foreign
+		uint ref_count;
+		driver_t *real_driver;
+		store_t *real_store;
 
-	void (*bad_callback)( void *aux );
-	void *bad_callback_aux;
+		void (*bad_callback)( void *aux );
+		void *bad_callback_aux;
+	};
 } proxy_store_t;
 
 static void ATTR_PRINTFLIKE(1, 2)
@@ -81,10 +84,13 @@ proxy_store_deref( proxy_store_t *ctx )
 
 static int curr_tag;
 
-typedef struct {
-	uint ref_count;
-	int tag;
+#define GEN_CMD \
+	uint ref_count; \
+	int tag; \
 	proxy_store_t *ctx;
+
+typedef struct {
+	GEN_CMD
 } gen_cmd_t;
 
 static gen_cmd_t *
@@ -148,11 +154,14 @@ static @type@proxy_@name@( store_t *gctx@decl_args@ )
 //# END
 
 //# TEMPLATE CALLBACK
-typedef struct {
+typedef union {
 	gen_cmd_t gen;
-	void (*callback)( @decl_cb_args@void *aux );
-	void *callback_aux;
-	@decl_state@
+	struct {
+		GEN_CMD
+		void (*callback)( @decl_cb_args@void *aux );
+		void *callback_aux;
+		@decl_state@
+	};
 } @name@_cmd_t;
 
 static void
@@ -161,10 +170,10 @@ proxy_@name@_cb( @decl_cb_args@void *aux )
 	@name@_cmd_t *cmd = (@name@_cmd_t *)aux;
 
 	@pre_print_cb_args@
-	debug( "%s[% 2d] Callback enter @name@@print_fmt_cb_args@\n", cmd->gen.ctx->label, cmd->gen.tag@print_pass_cb_args@ );
+	debug( "%s[% 2d] Callback enter @name@@print_fmt_cb_args@\n", cmd->ctx->label, cmd->tag@print_pass_cb_args@ );
 	@print_cb_args@
 	cmd->callback( @pass_cb_args@cmd->callback_aux );
-	debug( "%s[% 2d] Callback leave @name@\n", cmd->gen.ctx->label, cmd->gen.tag );
+	debug( "%s[% 2d] Callback leave @name@\n", cmd->ctx->label, cmd->tag );
 	proxy_cmd_done( &cmd->gen );
 }
 
@@ -177,10 +186,10 @@ static @type@proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@v
 	cmd->callback_aux = aux;
 	@assign_state@
 	@pre_print_args@
-	debug( "%s[% 2d] Enter @name@@print_fmt_args@\n", ctx->label, cmd->gen.tag@print_pass_args@ );
+	debug( "%s[% 2d] Enter @name@@print_fmt_args@\n", ctx->label, cmd->tag@print_pass_args@ );
 	@print_args@
 	ctx->real_driver->@name@( ctx->real_store@pass_args@, proxy_@name@_cb, cmd );
-	debug( "%s[% 2d] Leave @name@\n", ctx->label, cmd->gen.tag );
+	debug( "%s[% 2d] Leave @name@\n", ctx->label, cmd->tag );
 	proxy_cmd_done( &cmd->gen );
 }
 //# END
@@ -245,9 +254,9 @@ static @type@proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@v
 //# DEFINE fetch_msg_print_pass_cb_args , fbuf, (long long)cmd->data->date, cmd->data->len
 //# DEFINE fetch_msg_print_cb_args
 	if (sts == DRV_OK && (DFlags & DEBUG_DRV_ALL)) {
-		printf( "%s=========\n", cmd->gen.ctx->label );
+		printf( "%s=========\n", cmd->ctx->label );
 		fwrite( cmd->data->data, cmd->data->len, 1, stdout );
-		printf( "%s=========\n", cmd->gen.ctx->label );
+		printf( "%s=========\n", cmd->ctx->label );
 		fflush( stdout );
 	}
 //# END
@@ -314,7 +323,7 @@ proxy_alloc_store( store_t *real_ctx, const char *label )
 	proxy_store_t *ctx;
 
 	ctx = nfcalloc( sizeof(*ctx) );
-	ctx->gen.driver = &proxy_driver;
+	ctx->driver = &proxy_driver;
 	ctx->gen.conf = real_ctx->conf;
 	ctx->ref_count = 1;
 	ctx->label = label;

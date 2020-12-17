@@ -186,22 +186,22 @@ int map_name( const char *arg, char **result, uint reserve, const char *in, cons
 	typedef union { \
 		T##_array_t array; \
 		struct { \
-			T *dummy_data; \
-			uint dummy_size; \
+			T *data; \
+			uint size; \
 			uint alloc; \
-		} extra; \
+		}; \
 	} T##_array_alloc_t; \
 	static INLINE T *T##_array_append( T##_array_alloc_t *arr ) \
 	{ \
-		if (arr->array.size == arr->extra.alloc) { \
-			arr->extra.alloc = arr->extra.alloc * 2 + 100; \
-			arr->array.data = nfrealloc( arr->array.data, arr->extra.alloc * sizeof(T) ); \
+		if (arr->size == arr->alloc) { \
+			arr->alloc = arr->alloc * 2 + 100; \
+			arr->data = nfrealloc( arr->data, arr->alloc * sizeof(T) ); \
 		} \
-		return &arr->array.data[arr->array.size++]; \
+		return &arr->data[arr->size++]; \
 	}
 
 #define ARRAY_INIT(arr) \
-	do { (arr)->array.data = NULL; (arr)->array.size = (arr)->extra.alloc = 0; } while (0)
+	do { (arr)->data = NULL; (arr)->size = (arr)->alloc = 0; } while (0)
 
 #define ARRAY_SQUEEZE(arr) \
 	do { \

@@ -6,7 +6,7 @@ AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE
 AM_MAINTAINER_MODE
 
-AC_PROG_CC_C99
+AC_PROG_CC
 if test "$GCC" = yes; then
     warnings="
         -Wall -Wextra
@@ -17,8 +17,30 @@ if test "$GCC" = yes; then
 
         -Wno-overlength-strings
     "
-    CFLAGS="$CFLAGS -pipe -std=c99 -pedantic $(echo $warnings)"
+    CFLAGS="$CFLAGS -pipe -std=c11 -pedantic $(echo $warnings)"
 fi
+
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+void fkt(void)
+{
+    int a = 42;  // c99 comment
+
+    for (int i = 0; i < a; i++) {}  // declaration inside for()
+    int b;  // declaration after code
+}
+
+// c11 anonymous structs/unions
+struct base {
+    int a;
+};
+union deriv {
+    struct base gen;
+    struct {
+        int a;
+        int b;
+    };
+};
+])], , [AC_MSG_ERROR([compiler does not support required C11 features])])
 
 CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE"
 

@@ -69,17 +69,23 @@ typedef struct imap_server_conf {
 	char failed;
 } imap_server_conf_t;
 
-typedef struct {
+typedef union imap_store_conf {
 	store_conf_t gen;
-	imap_server_conf_t *server;
-	char delimiter;
-	char use_namespace;
-	char use_lsub;
+	struct {
+		STORE_CONF
+		imap_server_conf_t *server;
+		char delimiter;
+		char use_namespace;
+		char use_lsub;
+	};
 } imap_store_conf_t;
 
-typedef struct {
+typedef union imap_message {
 	message_t gen;
-/*	uint seq; will be needed when expunges are tracked */
+	struct {
+		MESSAGE(union imap_message)
+		// uint seq; will be needed when expunges are tracked
+	};
 } imap_message_t;
 
 #define NIL	(void*)0x1
@@ -93,7 +99,7 @@ typedef struct _list {
 
 #define MAX_LIST_DEPTH 5
 
-typedef struct imap_store imap_store_t;
+typedef union imap_store imap_store_t;
 
 typedef struct {
 	list_t *head, **stack[MAX_LIST_DEPTH];
@@ -103,116 +109,142 @@ typedef struct {
 
 typedef struct imap_cmd imap_cmd_t;
 
-struct imap_store {
+union imap_store {
 	store_t gen;
-	const char *label; /* foreign */
-	const char *prefix;
-	const char *name;
-	uint ref_count;
-	uint opts;
-	enum { SST_BAD, SST_HALF, SST_GOOD } state;
-	/* trash folder's existence is not confirmed yet */
-	enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
-	// What kind of BODY-less FETCH response we're expecting.
-	enum { FetchNone, FetchMsgs, FetchUidNext } fetch_sts;
-	uint got_namespace:1;
-	uint has_forwarded:1;
-	char delimiter[2]; /* hierarchy delimiter */
-	char *ns_prefix, ns_delimiter; /* NAMESPACE info */
-	string_list_t *boxes; // _list results
-	char listed; // was _list already run with these flags?
-	// note that the message counts do _not_ reflect stats from msgs,
-	// but mailbox totals.
-	int total_msgs, recent_msgs;
-	uint uidvalidity, uidnext;
-	message_t *msgs;
-	message_t **msgapp; /* FETCH results */
-	uint caps; /* CAPABILITY results */
-	string_list_t *auth_mechs;
-	parse_list_state_t parse_list_sts;
-	/* command queue */
-	imap_cmd_t *pending, **pending_append;
-	imap_cmd_t *in_progress, **in_progress_append;
-	imap_cmd_t *wait_check, **wait_check_append;
-	int nexttag, num_in_progress, num_wait_check;
-	uint buffer_mem; /* memory currently occupied by buffers in the queue */
+	struct {
+		STORE(union imap_store)
+		const char *label;  // foreign
+		const char *prefix;
+		const char *name;
+		uint ref_count;
+		uint opts;
+		enum { SST_BAD, SST_HALF, SST_GOOD } state;
+		// The trash folder's existence is not confirmed yet
+		enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
+		// What kind of BODY-less FETCH response we're expecting
+		enum { FetchNone, FetchMsgs, FetchUidNext } fetch_sts;
+		uint got_namespace:1;
+		uint has_forwarded:1;
+		char delimiter[2];  // Hierarchy delimiter
+		char *ns_prefix, ns_delimiter;  // NAMESPACE info
+		string_list_t *boxes;  // _list results
+		char listed;  // was _list already run with these flags?
+		// note that the message counts do _not_ reflect stats from msgs,
+		// but mailbox totals.
+		int total_msgs, recent_msgs;
+		uint uidvalidity, uidnext;
+		imap_message_t **msgapp, *msgs;  // FETCH results
+		uint caps;  // CAPABILITY results
+		string_list_t *auth_mechs;
+		parse_list_state_t parse_list_sts;
+		// Command queue
+		imap_cmd_t *pending, **pending_append;
+		imap_cmd_t *in_progress, **in_progress_append;
+		imap_cmd_t *wait_check, **wait_check_append;
+		int nexttag, num_in_progress, num_wait_check;
+		uint buffer_mem;  // Memory currently occupied by buffers in the queue
 
-	/* Used during sequential operations like connect */
-	enum { GreetingPending = 0, GreetingBad, GreetingOk, GreetingPreauth } greeting;
-	int expectBYE; /* LOGOUT is in progress */
-	int expectEOF; /* received LOGOUT's OK or unsolicited BYE */
-	int canceling; /* imap_cancel() is in progress */
-	union {
-		void (*imap_open)( int sts, void *aux );
-		void (*imap_cancel)( void *aux );
-	} callbacks;
-	void *callback_aux;
+		// Used during sequential operations like connect
+		enum { GreetingPending = 0, GreetingBad, GreetingOk, GreetingPreauth } greeting;
+		int expectBYE;  // LOGOUT is in progress
+		int expectEOF;  // received LOGOUT's OK or unsolicited BYE
+		int canceling;  // imap_cancel() is in progress
+		union {
+			void (*imap_open)( int sts, void *aux );
+			void (*imap_cancel)( void *aux );
+		} callbacks;
+		void *callback_aux;
 #ifdef HAVE_LIBSASL
-	sasl_conn_t *sasl;
-	int sasl_cont;
+		sasl_conn_t *sasl;
+		int sasl_cont;
 #endif
 
-	void (*bad_callback)( void *aux );
-	void *bad_callback_aux;
+		void (*bad_callback)( void *aux );
+		void *bad_callback_aux;
 
-	conn_t conn; /* this is BIG, so put it last */
+		conn_t conn;  // This is BIG, so put it last
+	};
 };
+
+#define IMAP_CMD \
+	struct imap_cmd *next; \
+	char *cmd; \
+	int tag; \
+	\
+	struct { \
+		/* Will be called on each continuation request until it resets this pointer. \
+		 * Needs to invoke bad_callback and return -1 on error, otherwise return 0. */ \
+		int (*cont)( imap_store_t *ctx, imap_cmd_t *cmd, const char *prompt ); \
+		void (*done)( imap_store_t *ctx, imap_cmd_t *cmd, int response ); \
+		char *data; \
+		uint data_len; \
+		uint uid;  /* to identify fetch responses */ \
+		char high_prio;  /* if command is queued, put it at the front of the queue. */ \
+		char wait_check;  /* Don't report success until subsequent CHECK success. */ \
+		char to_trash;  /* we are storing to trash, not current. */ \
+		char create;  /* create the mailbox if we get an error which suggests so. */ \
+		char failok;  /* Don't complain about NO response. */ \
+	} param;
 
 struct imap_cmd {
-	struct imap_cmd *next;
-	char *cmd;
-	int tag;
-
-	struct {
-		/* Will be called on each continuation request until it resets this pointer.
-		 * Needs to invoke bad_callback and return -1 on error, otherwise return 0. */
-		int (*cont)( imap_store_t *ctx, imap_cmd_t *cmd, const char *prompt );
-		void (*done)( imap_store_t *ctx, imap_cmd_t *cmd, int response );
-		char *data;
-		uint data_len;
-		uint uid; /* to identify fetch responses */
-		char high_prio; /* if command is queued, put it at the front of the queue. */
-		char wait_check;  // Don't report success until subsequent CHECK success.
-		char to_trash; /* we are storing to trash, not current. */
-		char create; /* create the mailbox if we get an error which suggests so. */
-		char failok; /* Don't complain about NO response. */
-	} param;
+	IMAP_CMD
 };
 
-typedef struct {
-	imap_cmd_t gen;
-	void (*callback)( int sts, void *aux );
+#define IMAP_CMD_SIMPLE \
+	IMAP_CMD \
+	void (*callback)( int sts, void *aux ); \
 	void *callback_aux;
+
+typedef union {
+	imap_cmd_t gen;
+	struct {
+		IMAP_CMD_SIMPLE
+	};
 } imap_cmd_simple_t;
 
-typedef struct {
+typedef union {
 	imap_cmd_simple_t gen;
-	msg_data_t *msg_data;
+	struct {
+		IMAP_CMD_SIMPLE
+		msg_data_t *msg_data;
+	};
 } imap_cmd_fetch_msg_t;
 
-typedef struct {
+typedef union {
 	imap_cmd_t gen;
-	void (*callback)( int sts, uint uid, void *aux );
-	void *callback_aux;
-	uint out_uid;
+	struct {
+		IMAP_CMD
+		void (*callback)( int sts, uint uid, void *aux );
+		void *callback_aux;
+		uint out_uid;
+	};
 } imap_cmd_out_uid_t;
 
-typedef struct {
+typedef union {
 	imap_cmd_t gen;
-	void (*callback)( int sts, message_t *msgs, void *aux );
-	void *callback_aux;
-	message_t **out_msgs;
-	uint uid;
+	struct {
+		IMAP_CMD
+		void (*callback)( int sts, message_t *msgs, void *aux );
+		void *callback_aux;
+		imap_message_t **out_msgs;
+		uint uid;
+	};
 } imap_cmd_find_new_t;
 
-typedef struct {
-	uint ref_count;
+#define IMAP_CMD_REFCOUNTED_STATE \
+	uint ref_count; \
 	int ret_val;
-} imap_cmd_refcounted_state_t;
 
 typedef struct {
+	IMAP_CMD_REFCOUNTED_STATE
+} imap_cmd_refcounted_state_t;
+
+typedef union {
 	imap_cmd_t gen;
-	imap_cmd_refcounted_state_t *state;
+	struct {
+		IMAP_CMD
+		imap_cmd_refcounted_state_t *state;
+	};
 } imap_cmd_refcounted_t;
 
 #define CAP(cap) (ctx->caps & (1 << (cap)))
@@ -283,8 +315,8 @@ new_imap_cmd( uint size )
 
 #define INIT_IMAP_CMD_X(type, cmdp, cb, aux) \
 	cmdp = (type *)new_imap_cmd( sizeof(*cmdp) ); \
-	cmdp->gen.callback = cb; \
-	cmdp->gen.callback_aux = aux;
+	cmdp->callback = cb; \
+	cmdp->callback_aux = aux;
 
 static void
 done_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd, int response )
@@ -391,7 +423,7 @@ cmd_sendable( imap_store_t *ctx, imap_cmd_t *cmd )
 		/* Don't build a queue of MOVE/COPY/APPEND commands that may all fail. */
 		return 0;
 	}
-	if (ctx->num_in_progress >= ((imap_store_conf_t *)ctx->gen.conf)->server->max_in_progress) {
+	if (ctx->num_in_progress >= ctx->conf->server->max_in_progress) {
 		/* Too many commands in flight. */
 		return 0;
 	}
@@ -628,15 +660,15 @@ imap_refcounted_new_cmd( imap_cmd_refcounted_state_t *sts )
 }
 
 #define DONE_REFCOUNTED_STATE(sts) \
-	if (!--sts->gen.ref_count) { \
-		sts->callback( sts->gen.ret_val, sts->callback_aux ); \
+	if (!--sts->ref_count) { \
+		sts->callback( sts->ret_val, sts->callback_aux ); \
 		free( sts ); \
 	}
 
 #define DONE_REFCOUNTED_STATE_ARGS(sts, finalize, ...) \
-	if (!--sts->gen.ref_count) { \
+	if (!--sts->ref_count) { \
 		finalize \
-		sts->callback( sts->gen.ret_val, __VA_ARGS__, sts->callback_aux ); \
+		sts->callback( sts->ret_val, __VA_ARGS__, sts->callback_aux ); \
 		free( sts ); \
 	}
 
@@ -1164,16 +1196,16 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		ctx->uidnext = uid + 1;
 	} else if (ctx->fetch_sts == FetchMsgs) {
 		cur = nfcalloc( sizeof(*cur) );
-		*ctx->msgapp = &cur->gen;
-		ctx->msgapp = &cur->gen.next;
-		cur->gen.uid = uid;
-		cur->gen.flags = mask;
-		cur->gen.status = status;
-		cur->gen.size = size;
+		*ctx->msgapp = cur;
+		ctx->msgapp = &cur->next;
+		cur->uid = uid;
+		cur->flags = mask;
+		cur->status = status;
+		cur->size = size;
 		if (msgid)
-			cur->gen.msgid = nfstrndup( msgid, msgid_len );
+			cur->msgid = nfstrndup( msgid, msgid_len );
 		if (tuid)
-			memcpy( cur->gen.tuid, tuid, TUIDL );
+			memcpy( cur->tuid, tuid, TUIDL );
 		status &= ~(M_FLAGS | M_RECENT | M_SIZE | M_HEADER);
 	} else {
 	  badrsp:
@@ -1207,7 +1239,7 @@ parse_capability( imap_store_t *ctx, char *cmd )
 					ctx->caps |= 1 << i;
 		}
 	}
-	ctx->caps &= ~((imap_store_conf_t *)ctx->gen.conf)->server->cap_mask;
+	ctx->caps &= ~ctx->conf->server->cap_mask;
 	if (!CAP(NOLOGIN))
 		add_string_list( &ctx->auth_mechs, "LOGIN" );
 }
@@ -1418,12 +1450,15 @@ prepare_box( char **buf, const imap_store_t *ctx )
 static int
 prepare_trash( char **buf, const imap_store_t *ctx )
 {
-	return prepare_name( buf, ctx, ctx->prefix, ctx->gen.conf->trash );
+	return prepare_name( buf, ctx, ctx->prefix, ctx->conf->trash );
 }
 
-typedef struct {
+typedef union {
 	imap_cmd_t gen;
-	imap_cmd_t *orig_cmd;
+	struct {
+		IMAP_CMD
+		imap_cmd_t *orig_cmd;
+	};
 } imap_cmd_trycreate_t;
 
 static void imap_open_store_greeted( imap_store_t * );
@@ -1589,7 +1624,7 @@ imap_socket_read( void *aux )
 						imap_cmd_trycreate_t *cmd2 =
 							(imap_cmd_trycreate_t *)new_imap_cmd( sizeof(*cmd2) );
 						cmd2->orig_cmd = cmdp;
-						cmd2->gen.param.high_prio = 1;
+						cmd2->param.high_prio = 1;
 						p = strchr( cmdp->cmd, '"' );
 						imap_exec( ctx, &cmd2->gen, get_cmd_result_p2,
 						           "CREATE %.*s", imap_strchr( p + 1, '"' ) - p + 1, p );
@@ -1669,7 +1704,7 @@ imap_cancel_store( store_t *gctx )
 	cancel_pending_imap_cmds( ctx );
 	free( ctx->ns_prefix );
 	free_string_list( ctx->auth_mechs );
-	free_generic_messages( ctx->msgs );
+	free_generic_messages( &ctx->msgs->gen );
 	free_string_list( ctx->boxes );
 	imap_deref( ctx );
 }
@@ -1701,12 +1736,12 @@ imap_invoke_bad_callback( imap_store_t *ctx )
 
 /******************* imap_free_store *******************/
 
-static store_t *unowned;
+static imap_store_t *unowned;
 
 static void
 imap_cancel_unowned( void *gctx )
 {
-	store_t *store, **storep;
+	imap_store_t *store, **storep;
 
 	for (storep = &unowned; (store = *storep); storep = &store->next)
 		if (store == gctx) {
@@ -1723,11 +1758,11 @@ imap_free_store( store_t *gctx )
 
 	assert( !ctx->pending && !ctx->in_progress && !ctx->wait_check );
 
-	free_generic_messages( ctx->msgs );
+	free_generic_messages( &ctx->msgs->gen );
 	ctx->msgs = NULL;
 	imap_set_bad_callback( gctx, imap_cancel_unowned, gctx );
-	gctx->next = unowned;
-	unowned = gctx;
+	ctx->next = unowned;
+	unowned = ctx;
 }
 
 /******************* imap_cleanup *******************/
@@ -1737,16 +1772,16 @@ static void imap_cleanup_p2( imap_store_t *, imap_cmd_t *, int );
 static void
 imap_cleanup( void )
 {
-	store_t *ctx, *nctx;
+	imap_store_t *ctx, *nctx;
 
 	for (ctx = unowned; ctx; ctx = nctx) {
 		nctx = ctx->next;
-		imap_set_bad_callback( ctx, (void (*)(void *))imap_cancel_store, ctx );
+		imap_set_bad_callback( &ctx->gen, (void (*)(void *))imap_cancel_store, ctx );
 		if (((imap_store_t *)ctx)->state != SST_BAD) {
 			((imap_store_t *)ctx)->expectBYE = 1;
 			imap_exec( (imap_store_t *)ctx, NULL, imap_cleanup_p2, "LOGOUT" );
 		} else {
-			imap_cancel_store( ctx );
+			imap_cancel_store( &ctx->gen );
 		}
 	}
 }
@@ -1794,20 +1829,19 @@ imap_alloc_store( store_conf_t *conf, const char *label )
 {
 	imap_store_conf_t *cfg = (imap_store_conf_t *)conf;
 	imap_server_conf_t *srvc = cfg->server;
-	imap_store_t *ctx;
-	store_t **ctxp;
+	imap_store_t *ctx, **ctxp;
 
 	/* First try to recycle a whole store. */
-	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
-		if (ctx->state == SST_GOOD && ctx->gen.conf == conf) {
-			*ctxp = ctx->gen.next;
+	for (ctxp = &unowned; (ctx = *ctxp); ctxp = &ctx->next)
+		if (ctx->state == SST_GOOD && ctx->conf == cfg) {
+			*ctxp = ctx->next;
 			goto gotstore;
 		}
 
 	/* Then try to recycle a server connection. */
-	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
-		if (ctx->state != SST_BAD && ((imap_store_conf_t *)ctx->gen.conf)->server == srvc) {
-			*ctxp = ctx->gen.next;
+	for (ctxp = &unowned; (ctx = *ctxp); ctxp = &ctx->next)
+		if (ctx->state != SST_BAD && ctx->conf->server == srvc) {
+			*ctxp = ctx->next;
 			free_string_list( ctx->boxes );
 			ctx->boxes = NULL;
 			ctx->listed = 0;
@@ -1819,7 +1853,7 @@ imap_alloc_store( store_conf_t *conf, const char *label )
 
 	/* Finally, schedule opening a new server connection. */
 	ctx = nfcalloc( sizeof(*ctx) );
-	ctx->gen.driver = &imap_driver;
+	ctx->driver = &imap_driver;
 	ctx->ref_count = 1;
 	socket_init( &ctx->conn, &srvc->sconf,
 	             (void (*)( void * ))imap_invoke_bad_callback,
@@ -1829,7 +1863,7 @@ imap_alloc_store( store_conf_t *conf, const char *label )
 	ctx->wait_check_append = &ctx->wait_check;
 
   gotsrv:
-	ctx->gen.conf = conf;
+	ctx->conf = cfg;
   gotstore:
 	ctx->label = label;
 	return &ctx->gen;
@@ -1857,15 +1891,11 @@ static void
 imap_open_store_connected( int ok, void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)aux;
-#ifdef HAVE_LIBSSL
-	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
-	imap_server_conf_t *srvc = cfg->server;
-#endif
 
 	if (!ok)
 		imap_open_store_bail( ctx, FAIL_WAIT );
 #ifdef HAVE_LIBSSL
-	else if (srvc->ssl_type == SSL_IMAPS)
+	else if (ctx->conf->server->ssl_type == SSL_IMAPS)
 		socket_start_tls( &ctx->conn, imap_open_store_tlsstarted1 );
 #endif
 	else
@@ -1908,8 +1938,7 @@ static void
 imap_open_store_authenticate( imap_store_t *ctx )
 {
 #ifdef HAVE_LIBSSL
-	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
-	imap_server_conf_t *srvc = cfg->server;
+	imap_server_conf_t *srvc = ctx->conf->server;
 #endif
 
 	if (ctx->greeting != GreetingPreauth) {
@@ -2108,7 +2137,7 @@ static int
 process_sasl_step( imap_store_t *ctx, int rc, const char *in, uint in_len,
                    sasl_interact_t *interact, const char **out, uint *out_len )
 {
-	imap_server_conf_t *srvc = ((imap_store_conf_t *)ctx->gen.conf)->server;
+	imap_server_conf_t *srvc = ctx->conf->server;
 
 	while (rc == SASL_INTERACT) {
 		if (process_sasl_interact( interact, srvc ) < 0)
@@ -2237,8 +2266,7 @@ done_sasl_auth( imap_store_t *ctx, imap_cmd_t *cmd ATTR_UNUSED, int response )
 static void
 imap_open_store_authenticate2( imap_store_t *ctx )
 {
-	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
-	imap_server_conf_t *srvc = cfg->server;
+	imap_server_conf_t *srvc = ctx->conf->server;
 	string_list_t *mech, *cmech;
 	int auth_login = 0;
 	int skipped_login = 0;
@@ -2409,10 +2437,10 @@ imap_open_store_compress_p2( imap_store_t *ctx, imap_cmd_t *cmd ATTR_UNUSED, int
 static void
 imap_open_store_namespace( imap_store_t *ctx )
 {
-	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
+	imap_store_conf_t *cfg = ctx->conf;
 
 	ctx->state = SST_HALF;
-	ctx->prefix = cfg->gen.path;
+	ctx->prefix = cfg->path;
 	ctx->delimiter[0] = cfg->delimiter;
 	if (((!ctx->prefix && cfg->use_namespace) || !cfg->delimiter) && CAP(NAMESPACE)) {
 		/* get NAMESPACE info */
@@ -2439,9 +2467,7 @@ imap_open_store_namespace_p2( imap_store_t *ctx, imap_cmd_t *cmd ATTR_UNUSED, in
 static void
 imap_open_store_namespace2( imap_store_t *ctx )
 {
-	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
-
-	if (!ctx->prefix && cfg->use_namespace)
+	if (!ctx->prefix && ctx->conf->use_namespace)
 		ctx->prefix = ctx->ns_prefix;
 	if (!ctx->delimiter[0])
 		ctx->delimiter[0] = ctx->ns_delimiter;
@@ -2471,7 +2497,7 @@ imap_open_store_ssl_bail( imap_store_t *ctx )
 static void
 imap_open_store_bail( imap_store_t *ctx, int failed )
 {
-	((imap_store_conf_t *)ctx->gen.conf)->server->failed = (char)failed;
+	ctx->conf->server->failed = (char)failed;
 	ctx->callbacks.imap_open( DRV_STORE_BAD, ctx->callback_aux );
 }
 
@@ -2484,7 +2510,7 @@ imap_select_box( store_t *gctx, const char *name )
 
 	assert( !ctx->pending && !ctx->in_progress && !ctx->wait_check );
 
-	free_generic_messages( ctx->msgs );
+	free_generic_messages( &ctx->msgs->gen );
 	ctx->msgs = NULL;
 	ctx->msgapp = &ctx->msgs;
 
@@ -2498,10 +2524,13 @@ imap_get_box_path( store_t *gctx ATTR_UNUSED )
 	return NULL;
 }
 
-typedef struct {
+typedef union {
 	imap_cmd_t gen;
-	void (*callback)( int sts, uint uidvalidity, void *aux );
-	void *callback_aux;
+	struct {
+		IMAP_CMD
+		void (*callback)( int sts, uint uidvalidity, void *aux );
+		void *callback_aux;
+	};
 } imap_cmd_open_box_t;
 
 static void imap_open_box_p2( imap_store_t *, imap_cmd_t *, int );
@@ -2525,7 +2554,7 @@ imap_open_box( store_t *gctx,
 	ctx->uidnext = 0;
 
 	INIT_IMAP_CMD(imap_cmd_open_box_t, cmd, cb, aux)
-	cmd->gen.param.failok = 1;
+	cmd->param.failok = 1;
 	imap_exec( ctx, &cmd->gen, imap_open_box_p2,
 	           "SELECT \"%\\s\"", buf );
 	free( buf );
@@ -2702,10 +2731,13 @@ imap_set_range( imap_range_t *ranges, uint *nranges, int low_flags, int high_fla
 		ranges[r].flags |= (ranges[r].last <= maxlow) ? low_flags : high_flags;
 }
 
-typedef struct {
+typedef union {
 	imap_cmd_refcounted_state_t gen;
-	void (*callback)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux );
-	void *callback_aux;
+	struct {
+		IMAP_CMD_REFCOUNTED_STATE
+		void (*callback)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux );
+		void *callback_aux;
+	};
 } imap_load_box_state_t;
 
 static void imap_submit_load( imap_store_t *, const char *, int, imap_load_box_state_t * );
@@ -2778,13 +2810,13 @@ imap_sort_msgs_comp( const void *a_, const void *b_ )
 static void
 imap_sort_msgs( imap_store_t *ctx )
 {
-	uint count = count_generic_messages( ctx->msgs );
+	uint count = count_generic_messages( &ctx->msgs->gen );
 	if (count <= 1)
 		return;
 
-	message_t **t = nfmalloc( sizeof(*t) * count );
+	imap_message_t **t = nfmalloc( sizeof(*t) * count );
 
-	message_t *m = ctx->msgs;
+	imap_message_t *m = ctx->msgs;
 	for (uint i = 0; i < count; i++) {
 		t[i] = m;
 		m = m->next;
@@ -2833,9 +2865,9 @@ imap_submit_load_p3( imap_store_t *ctx, imap_load_box_state_t *sts )
 {
 	DONE_REFCOUNTED_STATE_ARGS(sts, {
 		ctx->fetch_sts = FetchNone;
-		if (sts->gen.ret_val == DRV_OK)
+		if (sts->ret_val == DRV_OK)
 			imap_sort_msgs( ctx );
-	}, ctx->msgs, ctx->total_msgs, ctx->recent_msgs)
+	}, &ctx->msgs->gen, ctx->total_msgs, ctx->recent_msgs)
 }
 
 /******************* imap_fetch_msg *******************/
@@ -2849,7 +2881,7 @@ imap_fetch_msg( store_t *ctx, message_t *msg, msg_data_t *data, int minimal,
 	imap_cmd_fetch_msg_t *cmd;
 
 	INIT_IMAP_CMD_X(imap_cmd_fetch_msg_t, cmd, cb, aux)
-	cmd->gen.gen.param.uid = msg->uid;
+	cmd->param.uid = msg->uid;
 	cmd->msg_data = data;
 	data->data = NULL;
 	imap_exec( (imap_store_t *)ctx, &cmd->gen.gen, imap_fetch_msg_p2,
@@ -2890,10 +2922,13 @@ imap_make_flags( int flags, char *buf )
 	return d;
 }
 
-typedef struct {
+typedef union {
 	imap_cmd_refcounted_state_t gen;
-	void (*callback)( int sts, void *aux );
-	void *callback_aux;
+	struct {
+		IMAP_CMD_REFCOUNTED_STATE
+		void (*callback)( int sts, void *aux );
+		void *callback_aux;
+	};
 } imap_set_msg_flags_state_t;
 
 static void imap_set_flags_p2( imap_store_t *, imap_cmd_t *, int );
@@ -2954,10 +2989,13 @@ imap_set_flags_p3( imap_set_msg_flags_state_t *sts )
 
 /******************* imap_close_box *******************/
 
-typedef struct {
+typedef union {
 	imap_cmd_refcounted_state_t gen;
-	void (*callback)( int sts, void *aux );
-	void *callback_aux;
+	struct {
+		IMAP_CMD_REFCOUNTED_STATE
+		void (*callback)( int sts, void *aux );
+		void *callback_aux;
+	};
 } imap_expunge_state_t;
 
 static void imap_close_box_p2( imap_store_t *, imap_cmd_t *, int );
@@ -2971,9 +3009,9 @@ imap_close_box( store_t *gctx,
 
 	assert( !ctx->num_wait_check );
 
-	if (ctx->gen.conf->trash && CAP(UIDPLUS)) {
+	if (ctx->conf->trash && CAP(UIDPLUS)) {
 		INIT_REFCOUNTED_STATE(imap_expunge_state_t, sts, cb, aux)
-		message_t *msg, *fmsg, *nmsg;
+		imap_message_t *msg, *fmsg, *nmsg;
 		int bl;
 		char buf[1000];
 
@@ -3030,8 +3068,8 @@ imap_trash_msg( store_t *gctx, message_t *msg,
 	char *buf;
 
 	INIT_IMAP_CMD(imap_cmd_simple_t, cmd, cb, aux)
-	cmd->gen.param.create = 1;
-	cmd->gen.param.to_trash = 1;
+	cmd->param.create = 1;
+	cmd->param.to_trash = 1;
 	if (prepare_trash( &buf, ctx ) < 0) {
 		cb( DRV_BOX_BAD, aux );
 		return;
@@ -3064,13 +3102,13 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 
 	INIT_IMAP_CMD(imap_cmd_out_uid_t, cmd, cb, aux)
 	ctx->buffer_mem += data->len;
-	cmd->gen.param.data_len = data->len;
-	cmd->gen.param.data = data->data;
+	cmd->param.data_len = data->len;
+	cmd->param.data = data->data;
 	cmd->out_uid = 0;
 
 	if (to_trash) {
-		cmd->gen.param.create = 1;
-		cmd->gen.param.to_trash = 1;
+		cmd->param.create = 1;
+		cmd->param.to_trash = 1;
 		if (prepare_trash( &buf, ctx ) < 0) {
 			cb( DRV_BOX_BAD, 0, aux );
 			return;
@@ -3185,15 +3223,18 @@ imap_find_new_msgs_p4( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *gcmd, int resp
 	imap_cmd_find_new_t *cmdp = (imap_cmd_find_new_t *)gcmd;
 
 	transform_box_response( &response );
-	cmdp->callback( response, *cmdp->out_msgs, cmdp->callback_aux );
+	cmdp->callback( response, &(*cmdp->out_msgs)->gen, cmdp->callback_aux );
 }
 
 /******************* imap_list_store *******************/
 
-typedef struct {
+typedef union {
 	imap_cmd_refcounted_state_t gen;
-	void (*callback)( int sts, string_list_t *, void *aux );
-	void *callback_aux;
+	struct {
+		IMAP_CMD_REFCOUNTED_STATE
+		void (*callback)( int sts, string_list_t *, void *aux );
+		void *callback_aux;
+	};
 } imap_list_store_state_t;
 
 static void imap_list_store_p2( imap_store_t *, imap_cmd_t *, int );
@@ -3204,7 +3245,7 @@ imap_list_store( store_t *gctx, int flags,
                  void (*cb)( int sts, string_list_t *boxes, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
-	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
+	imap_store_conf_t *cfg = ctx->conf;
 	INIT_REFCOUNTED_STATE(imap_list_store_state_t, sts, cb, aux)
 
 	// ctx->prefix may be empty, "INBOX.", or something else.
@@ -3341,8 +3382,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		type = "IMAP account";
 	} else if (!strcasecmp( "IMAPStore", cfg->cmd )) {
 		store = nfcalloc( sizeof(*store) );
-		store->gen.driver = &imap_driver;
-		name = store->gen.name = nfstrdup( cfg->val );
+		store->driver = &imap_driver;
+		name = store->name = nfstrdup( cfg->val );
 		store->use_namespace = 1;
 		*storep = &store->gen;
 		memset( &sserver, 0, sizeof(sserver) );
@@ -3522,7 +3563,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			else if (!strcasecmp( "SubscribedOnly", cfg->cmd ))
 				store->use_lsub = parse_bool( cfg );
 			else if (!strcasecmp( "Path", cfg->cmd ))
-				store->gen.path = nfstrdup( cfg->val );
+				store->path = nfstrdup( cfg->val );
 			else if (!strcasecmp( "PathDelimiter", cfg->cmd )) {
 				if (strlen( cfg->val ) != 1) {
 					error( "%s:%d: Path delimiter must be exactly one character long\n", cfg->file, cfg->line );
@@ -3622,7 +3663,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		if (!store->server) {
 			store->server = nfmalloc( sizeof(sserver) );
 			memcpy( store->server, &sserver, sizeof(sserver) );
-			store->server->name = store->gen.name;
+			store->server->name = store->name;
 		} else if (acc_opt) {
 			error( "%s '%s' has both Account and account-specific options\n", type, name );
 			cfg->err = 1;
