@@ -417,7 +417,7 @@ sub showbox($)
 	for my $uid (sort { $a <=> $b } keys %$ms) {
 		push @bc, $$ms{$uid}[0], $uid, $$ms{$uid}[1];
 	}
-	printbox($bn, \@bc);
+	printbox(\@bc);
 }
 
 # $filename
@@ -632,10 +632,10 @@ sub ckchan($$)
 	return $rslt;
 }
 
-# $box_name, \@box_state
-sub printbox($$)
+# \@box_state
+sub printbox($)
 {
-	my ($bn, $bs) = @_;
+	my ($bs) = @_;
 
 	print " [ $$bs[0],\n   ";
 	my $frst = 1;
@@ -673,8 +673,8 @@ sub printchan($)
 {
 	my ($cs) = @_;
 
-	printbox("far", $$cs[0]);
-	printbox("near", $$cs[1]);
+	printbox($$cs[0]);
+	printbox($$cs[1]);
 	printstate($$cs[2]);
 }
 
