@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <string.h>
 #include <ctype.h>
 #include <pwd.h>
@@ -154,9 +155,11 @@ vsys_error( const char *msg, va_list va )
 {
 	char buf[1024];
 
+	int errno_bak = errno;
 	flushn();
 	if ((uint)vsnprintf( buf, sizeof(buf), msg, va ) >= sizeof(buf))
 		oob();
+	errno = errno_bak;
 	perror( buf );
 }
 
