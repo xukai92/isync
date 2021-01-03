@@ -2273,6 +2273,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 #ifdef HAVE_LIBSASL
 	const char *saslavail;
 	char saslmechs[1024], *saslend = saslmechs;
+	int want_external = 0;
 #endif
 
 	// Ensure that there are no leftovers from previous runs. This is needed in case
@@ -2308,6 +2309,9 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 					*saslend++ = ' ';
 					memcpy( saslend, cmech->string, len + 1 );
 					saslend += len;
+
+					if (!strcasecmp( cmech->string, "EXTERNAL" ))
+						want_external = 1;
 #endif
 				}
 			}
@@ -2341,6 +2345,18 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 				goto saslbail;
 			error( "Error initializing SASL context: %s\n", sasl_errdetail( ctx->sasl ) );
 			goto bail;
+		}
+
+		// The built-in EXTERNAL mechanism wants the authentication id to be set
+		// even before instantiation; consequently it won't prompt for it, either.
+		// While this clearly makes sense on the server side, it arguably does not
+		// on the client side. Ah, well ...
+		if (want_external && ensure_user( srvc )) {
+			rc = sasl_setprop( ctx->sasl, SASL_AUTH_EXTERNAL, srvc->user );
+			if (rc != SASL_OK ) {
+				error( "Error setting SASL authentication id: %s\n", sasl_errdetail( ctx->sasl ) );
+				goto bail;
+			}
 		}
 
 		rc = sasl_client_start( ctx->sasl, saslmechs + 1, &interact, CAP(SASLIR) ? &out : NULL, &out_len, &gotmech );
