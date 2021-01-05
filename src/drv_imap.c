@@ -2115,8 +2115,8 @@ process_sasl_interact( sasl_interact_t *interact, imap_server_conf_t *srvc )
 		switch (interact->id) {
 		case SASL_CB_LIST_END:
 			return 0;
-		case SASL_CB_USER:
-		case SASL_CB_AUTHNAME:
+		case SASL_CB_USER:  // aka authorization id - who to act as
+		case SASL_CB_AUTHNAME:  // who is really logging in
 			val = ensure_user( srvc );
 			break;
 		case SASL_CB_PASS:
@@ -2366,7 +2366,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		return;
 	  notsasl:
 		if (!ctx->sasl || sasl_listmech( ctx->sasl, NULL, "", " ", "", &saslavail, NULL, NULL ) != SASL_OK)
-			saslavail = "(none)";  /* EXTERNAL is always there anyway. */
+			saslavail = "(none)";
 		if (!auth_login) {
 			error( "IMAP error: selected SASL mechanism(s) not available;\n"
 			       "   selected:%s\n   available: %s\n", saslmechs, saslavail );
