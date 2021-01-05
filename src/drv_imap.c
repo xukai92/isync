@@ -2149,7 +2149,7 @@ process_sasl_step( imap_store_t *ctx, int rc, const char *in, uint in_len,
 	} else if (rc == SASL_OK) {
 		ctx->sasl_cont = 0;
 	} else {
-		error( "Error: %s\n", sasl_errdetail( ctx->sasl ) );
+		error( "Error performing SASL authentication step: %s\n", sasl_errdetail( ctx->sasl ) );
 		return -1;
 	}
 	return 0;
@@ -2166,7 +2166,7 @@ decode_sasl_data( const char *prompt, char **in, uint *in_len )
 		rc = sasl_decode64( prompt, prompt_len, *in, prompt_len, in_len );
 		if (rc != SASL_OK) {
 			free( *in );
-			error( "Error: SASL(%d): %s\n", rc, sasl_errstring( rc, NULL, NULL ) );
+			error( "Error decoding SASL prompt: %s\n", sasl_errstring( rc, NULL, NULL ) );
 			return -1;
 		}
 	} else {
@@ -2185,7 +2185,7 @@ encode_sasl_data( const char *out, uint out_len, char **enc, uint *enc_len )
 	rc = sasl_encode64( out, out_len, *enc, enc_len_max, enc_len );
 	if (rc != SASL_OK) {
 		free( *enc );
-		error( "Error: SASL(%d): %s\n", rc, sasl_errstring( rc, NULL, NULL ) );
+		error( "Error encoding SASL response: %s\n", sasl_errstring( rc, NULL, NULL ) );
 		return -1;
 	}
 	return 0;
@@ -2327,7 +2327,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 			rc = sasl_client_init( sasl_callbacks );
 			if (rc != SASL_OK) {
 			  saslbail:
-				error( "Error: SASL(%d): %s\n", rc, sasl_errstring( rc, NULL, NULL ) );
+				error( "Error initializing SASL client: %s\n", sasl_errstring( rc, NULL, NULL ) );
 				goto bail;
 			}
 			sasl_inited = 1;
@@ -2339,7 +2339,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 				goto notsasl;
 			if (!ctx->sasl)
 				goto saslbail;
-			error( "Error: %s\n", sasl_errdetail( ctx->sasl ) );
+			error( "Error initializing SASL context: %s\n", sasl_errdetail( ctx->sasl ) );
 			goto bail;
 		}
 
