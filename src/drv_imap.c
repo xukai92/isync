@@ -1268,13 +1268,14 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	}
 	arg = list->val;
 	argl = list->len;
-	if (is_inbox( ctx, arg, argl )) {
-		// The server might be weird and have a non-uppercase INBOX. It
-		// may legitimately do so, but we need the canonical spelling.
-		memcpy( arg, "INBOX", 5 );
-	} else if ((l = strlen( ctx->prefix ))) {
-		if (!starts_with( arg, argl, ctx->prefix, l ))
+	if ((l = strlen( ctx->prefix ))) {
+		if (!starts_with( arg, argl, ctx->prefix, l )) {
+			if (is_inbox( ctx, arg, argl )) {
+				// INBOX and its subfolders bypass the namespace.
+				goto inbox;
+			}
 			goto skip;
+		}
 		arg += l;
 		argl -= l;
 		// A folder named "INBOX" would be indistinguishable from the
@@ -1286,6 +1287,14 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
 			goto skip;
 		}
+	} else if (is_inbox( ctx, arg, argl )) {
+	  inbox:
+		// The server might be weird and have a non-uppercase INBOX. It
+		// may legitimately do so, but we need the canonical spelling.
+		// Note that we do that only after prefix matching, under the
+		// assumption that the NAMESPACE (or Path) matches the
+		// capitalization of LIST.
+		memcpy( arg, "INBOX", 5 );
 	}
 	if (argl >= 5 && !memcmp( arg + argl - 5, ".lock", 5 )) /* workaround broken servers */
 		goto skip;
