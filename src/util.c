@@ -665,7 +665,7 @@ list_unlink( list_head_t *head )
 
 static notifier_t *notifiers;
 static int changed;  /* Iterator may be invalid now. */
-#ifdef HAVE_SYS_POLL_H
+#ifdef HAVE_POLL_H
 static struct pollfd *pollfds;
 static uint npolls, rpolls;
 #else
@@ -677,7 +677,7 @@ static uint npolls, rpolls;
 void
 init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux )
 {
-#ifdef HAVE_SYS_POLL_H
+#ifdef HAVE_POLL_H
 	uint idx = npolls++;
 	if (rpolls < npolls) {
 		rpolls = npolls;
@@ -699,7 +699,7 @@ init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux )
 void
 conf_notifier( notifier_t *sn, short and_events, short or_events )
 {
-#ifdef HAVE_SYS_POLL_H
+#ifdef HAVE_POLL_H
 	uint idx = sn->index;
 	pollfds[idx].events = (pollfds[idx].events & and_events) | or_events;
 #else
@@ -710,7 +710,7 @@ conf_notifier( notifier_t *sn, short and_events, short or_events )
 short
 notifier_config( notifier_t *sn )
 {
-#ifdef HAVE_SYS_POLL_H
+#ifdef HAVE_POLL_H
 	return pollfds[sn->index].events;
 #else
 	return sn->events;
@@ -721,7 +721,7 @@ void
 wipe_notifier( notifier_t *sn )
 {
 	notifier_t **snp;
-#ifdef HAVE_SYS_POLL_H
+#ifdef HAVE_POLL_H
 	uint idx;
 #endif
 
@@ -731,7 +731,7 @@ wipe_notifier( notifier_t *sn )
 	sn->next = NULL;
 	changed = 1;
 
-#ifdef HAVE_SYS_POLL_H
+#ifdef HAVE_POLL_H
 	idx = sn->index;
 	memmove( pollfds + idx, pollfds + idx + 1, (--npolls - idx) * sizeof(*pollfds) );
 	for (sn = notifiers; sn; sn = sn->next) {
@@ -803,7 +803,7 @@ event_wait( void )
 	notifier_t *sn;
 	int m;
 
-#ifdef HAVE_SYS_POLL_H
+#ifdef HAVE_POLL_H
 	int timeout = -1;
 	if ((head = timers.next) != &timers) {
 		wakeup_t *tmr = (wakeup_t *)head;

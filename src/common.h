@@ -226,7 +226,7 @@ typedef struct notifier {
 	struct notifier *next;
 	void (*cb)( int what, void *aux );
 	void *aux;
-#ifdef HAVE_SYS_POLL_H
+#ifdef HAVE_POLL_H
 	uint index;
 #else
 	int fd;
@@ -234,8 +234,8 @@ typedef struct notifier {
 #endif
 } notifier_t;
 
-#ifdef HAVE_SYS_POLL_H
-# include <sys/poll.h>
+#ifdef HAVE_POLL_H
+# include <poll.h>
 #else
 # define POLLIN 1
 # define POLLOUT 4

@@ -78,7 +78,7 @@ if test "x$ob_cv_strftime_z" = x"no"; then
     AC_MSG_ERROR([libc lacks necessary feature])
 fi
 
-AC_CHECK_HEADERS(sys/poll.h sys/select.h)
+AC_CHECK_HEADERS(poll.h sys/select.h)
 AC_CHECK_FUNCS(vasprintf strnlen memrchr timegm)
 
 AC_CHECK_LIB(socket, socket, [SOCK_LIBS="-lsocket"])
