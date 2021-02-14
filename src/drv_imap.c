@@ -1258,11 +1258,12 @@ static int
 parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 {
 	string_list_t *narg;
-	char *arg;
+	char *arg, c;
 	int argl, l;
 
 	if (!is_atom( list )) {
 		error( "IMAP error: malformed LIST response\n" );
+	  listbad:
 		free_list( list );
 		return LIST_BAD;
 	}
@@ -1301,6 +1302,34 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	if (map_name( arg, (char **)&narg, offsetof(string_list_t, string), ctx->delimiter, "/") < 0) {
 		warn( "IMAP warning: ignoring mailbox %s (reserved character '/' in name)\n", arg );
 		goto skip;
+	}
+	// Validate the normalized name. Technically speaking, we could tolerate
+	// '//' and '/./', and '/../' being forbidden is a limitation of the Maildir
+	// driver, but there isn't really a legitimate reason for these being present.
+	for (const char *p = narg->string, *sp = p;;) {
+		if (!(c = *p) || c == '/') {
+			uint pcl = (uint)(p - sp);
+			if (!pcl) {
+				error( "IMAP warning: ignoring mailbox '%s' due to empty name component\n", narg->string );
+				free( narg );
+				goto skip;
+			}
+			if (pcl == 1 && sp[0] == '.') {
+				error( "IMAP warning: ignoring mailbox '%s' due to '.' component\n", narg->string );
+				free( narg );
+				goto skip;
+			}
+			if (pcl == 2 && sp[0] == '.' && sp[1] == '.') {
+				error( "IMAP error: LIST'd mailbox name '%s' contains '..' component - THIS MIGHT BE AN ATTEMPT TO HACK YOU!\n", narg->string );
+				free( narg );
+				goto listbad;
+			}
+			if (!c)
+				break;
+			sp = ++p;
+		} else {
+			++p;
+		}
 	}
 	narg->next = ctx->boxes;
 	ctx->boxes = narg;
