@@ -1181,7 +1181,8 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		for (cmdp = ctx->in_progress; cmdp; cmdp = cmdp->next)
 			if (cmdp->param.uid == uid)
 				goto gotuid;
-		goto badrsp;
+		error( "IMAP error: unexpected FETCH response with BODY (UID %u)\n", uid );
+		return LIST_BAD;
 	  gotuid:
 		msgdata = ((imap_cmd_fetch_msg_t *)cmdp)->msg_data;
 		msgdata->data = body->val;
@@ -1208,9 +1209,8 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			memcpy( cur->tuid, tuid, TUIDL );
 		status &= ~(M_FLAGS | M_RECENT | M_SIZE | M_HEADER);
 	} else {
-	  badrsp:
-		error( "IMAP error: unexpected FETCH response (UID %u)\n", uid );
-		return LIST_BAD;
+		// These may come in as a result of STORE FLAGS despite .SILENT.
+		status &= ~(M_FLAGS | M_RECENT);
 	}
 
 	if (status) {
