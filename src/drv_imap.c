@@ -924,6 +924,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 	}
   bail:
 	free_list( sts->head );
+	sts->level = 0;
 	return LIST_BAD;
 }
 
