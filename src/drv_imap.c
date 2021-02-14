@@ -1253,48 +1253,53 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 	if (!s || *s != '[')
 		return RESP_OK;		/* no response code */
 	s++;
-	if (!(p = strchr( s, ']' ))) {
-	  bad_resp:
+	if (!(arg = next_arg( &s ))) {
 		error( "IMAP error: malformed response code\n" );
 		return RESP_CANCEL;
 	}
-	*p++ = 0;
-	if (!(arg = next_arg( &s )))
-		goto bad_resp;
 	if (!strcmp( "UIDVALIDITY", arg )) {
 		if (!(arg = next_arg( &s )) ||
-		    (ctx->uidvalidity = strtoul( arg, &earg, 10 ), *earg))
+		    (ctx->uidvalidity = strtoul( arg, &earg, 10 ), *earg != ']'))
 		{
 			error( "IMAP error: malformed UIDVALIDITY status\n" );
 			return RESP_CANCEL;
 		}
 	} else if (!strcmp( "UIDNEXT", arg )) {
 		if (!(arg = next_arg( &s )) ||
-		    (ctx->uidnext = strtoul( arg, &earg, 10 ), *earg))
+		    (ctx->uidnext = strtoul( arg, &earg, 10 ), *earg != ']'))
 		{
 			error( "IMAP error: malformed UIDNEXT status\n" );
 			return RESP_CANCEL;
 		}
 	} else if (!strcmp( "CAPABILITY", arg )) {
+		if (!(p = strchr( s, ']' ))) {
+			error( "IMAP error: malformed CAPABILITY status\n" );
+			return RESP_CANCEL;
+		}
+		*p = 0;
 		parse_capability( ctx, s );
-	} else if (!strcmp( "ALERT", arg )) {
+	} else if (!strcmp( "ALERT]", arg )) {
 		/* RFC2060 says that these messages MUST be displayed
 		 * to the user
 		 */
-		for (; isspace( (uchar)*p ); p++);
-		error( "*** IMAP ALERT *** %s\n", p );
+		if (!s) {
+			error( "IMAP error: malformed ALERT status\n" );
+			return RESP_CANCEL;
+		}
+		for (; isspace( (uchar)*s ); s++);
+		error( "*** IMAP ALERT *** %s\n", s );
 	} else if (cmd && !strcmp( "APPENDUID", arg )) {
 		if (!(arg = next_arg( &s )) ||
 		    (ctx->uidvalidity = strtoul( arg, &earg, 10 ), *earg) ||
 		    !(arg = next_arg( &s )) ||
-		    (((imap_cmd_out_uid_t *)cmd)->out_uid = strtoul( arg, &earg, 10 ), *earg))
+		    (((imap_cmd_out_uid_t *)cmd)->out_uid = strtoul( arg, &earg, 10 ), *earg != ']'))
 		{
 			error( "IMAP error: malformed APPENDUID status\n" );
 			return RESP_CANCEL;
 		}
 	} else if (!strcmp( "PERMANENTFLAGS", arg )) {
 		parse_list_init( &ctx->parse_list_sts );
-		if (parse_imap_list( NULL, &s, &ctx->parse_list_sts ) != LIST_OK) {
+		if (parse_imap_list( NULL, &s, &ctx->parse_list_sts ) != LIST_OK || *s != ']') {
 			error( "IMAP error: malformed PERMANENTFLAGS status\n" );
 			return RESP_CANCEL;
 		}
