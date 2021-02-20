@@ -1365,6 +1365,7 @@ box_opened2( sync_vars_t *svars, int t )
 	for (t = 0; t < 2; t++)
 		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != svars->newuidval[t])
 			fails++;
+	// If only one side changed UIDVALIDITY, we will try to re-approve it further down.
 	if (fails == 2) {
 		error( "Error: channel %s: UIDVALIDITY of both far side %s and near side %s changed.\n",
 		       svars->chan->name, svars->orig_name[F], svars->orig_name[N]);
@@ -1588,14 +1589,17 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 
 	for (t = 0; t < 2; t++) {
 		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != svars->newuidval[t]) {
+			// This code checks whether the messages with known UIDs are actually the
+			// same messages, as recognized by their Message-IDs.
 			unsigned need = 0, got = 0;
 			debug( "trying to re-approve uid validity of %s\n", str_fn[t] );
 			for (srec = svars->srecs; srec; srec = srec->next) {
 				if (srec->status & S_DEAD)
 					continue;
+				need++;
 				if (!srec->msg[t])
 					continue;  // Message disappeared.
-				need++;  // Present paired messages require re-validation.
+				// Present paired messages require re-validation.
 				if (!srec->msg[t]->msgid)
 					continue;  // Messages without ID are useless for re-validation.
 				if (!srec->msg[1-t])
@@ -1610,6 +1614,12 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				}
 				got++;
 			}
+			// We encountered no messages that contradict the hypothesis that the
+			// UIDVALIDITY change was spurious.
+			// If we got enough messages confirming the hypothesis, we just accept it.
+			// If there aren't quite enough messages, we check that at least 80% of
+			// those previously present are still there and confirm the hypothesis;
+			// this also covers the case of a box that was already empty.
 			if (got < 20 && got * 5 < need * 4) {
 				// Too few confirmed messages. This is very likely in the drafts folder.
 				// A proper fallback would be fetching more headers (which potentially need
