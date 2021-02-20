@@ -1366,10 +1366,8 @@ box_opened2( sync_vars_t *svars, int t )
 		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != svars->newuidval[t])
 			fails++;
 	if (fails == 2) {
-		error( "Error: channel %s: UIDVALIDITY of both far and near side changed\n"
-		       "(far side got %u, expected %u; near side got %u, expected %u).\n",
-		       svars->chan->name,
-		       svars->newuidval[F], svars->uidval[F], svars->newuidval[N], svars->uidval[N] );
+		error( "Error: channel %s: UIDVALIDITY of both far side %s and near side %s changed.\n",
+		       svars->chan->name, svars->orig_name[F], svars->orig_name[N]);
 	  bail:
 		svars->ret = SYNC_FAIL;
 		sync_bail( svars );
@@ -1617,10 +1615,8 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				// A proper fallback would be fetching more headers (which potentially need
 				// normalization) or the message body (which should be truncated for sanity)
 				// and comparing.
-				error( "Error: channel %s, %s box %s: Unable to recover from UIDVALIDITY change\n"
-				       "(got %u, expected %u).\n",
-				       svars->chan->name, str_fn[t], svars->orig_name[t],
-				       svars->newuidval[t], svars->uidval[t] );
+				error( "Error: channel %s, %s box %s: Unable to recover from UIDVALIDITY change.\n",
+				       svars->chan->name, str_fn[t], svars->orig_name[t] );
 				goto uvchg;
 			}
 			notice( "Notice: channel %s, %s box %s: Recovered from change of UIDVALIDITY.\n",
