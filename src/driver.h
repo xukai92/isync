@@ -35,7 +35,6 @@ typedef struct driver driver_t;
 	struct store_conf *next; \
 	char *name; \
 	driver_t *driver; \
-	const char *path;  /* should this be here? its interpretation is driver-specific */ \
 	const char *flat_delim; \
 	const char *map_inbox; \
 	const char *trash; \

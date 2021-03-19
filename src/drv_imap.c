@@ -74,6 +74,7 @@ typedef union imap_store_conf {
 	struct {
 		STORE_CONF
 		imap_server_conf_t *server;
+		char *path;  // Note: this may be modified after the delimiter is determined.
 		char delimiter;
 		char use_namespace;
 		char use_lsub;
@@ -114,8 +115,8 @@ union imap_store {
 	struct {
 		STORE(union imap_store)
 		const char *label;  // foreign
-		const char *prefix;
 		const char *name;
+		char *prefix;
 		uint ref_count;
 		uint opts;
 		enum { SST_BAD, SST_HALF, SST_GOOD } state;
@@ -1374,6 +1375,13 @@ is_INBOX( imap_store_t *ctx, const char *arg, int argl )
 	return 1;
 }
 
+static void
+normalize_INBOX( imap_store_t *ctx, char *arg, int argl )
+{
+	if (is_inbox( ctx, arg, argl ))
+		memcpy( arg, "INBOX", 5 );
+}
+
 static int
 parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 {
@@ -1388,33 +1396,27 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	}
 	arg = list->val;
 	argl = (int)list->len;
+	// The server might be weird and have a non-uppercase INBOX. It
+	// may legitimately do so, but we need the canonical spelling.
+	normalize_INBOX( ctx, arg, argl );
 	if ((l = strlen( ctx->prefix ))) {
 		if (!starts_with( arg, argl, ctx->prefix, l )) {
-			if (is_inbox( ctx, arg, argl )) {
-				// INBOX and its subfolders bypass the namespace.
-				goto inbox;
+			if (!is_INBOX( ctx, arg, argl ))
+				return LIST_OK;
+			// INBOX and its subfolders bypass the namespace.
+		} else {
+			arg += l;
+			argl -= l;
+			// A folder named "INBOX" would be indistinguishable from the
+			// actual INBOX after prefix stripping, so drop it. This applies
+			// only to the fully uppercased spelling, as our canonical box
+			// names are case-sensitive (unlike IMAP's INBOX).
+			if (is_INBOX( ctx, arg, argl )) {
+				if (!arg[5])  // No need to complain about subfolders as well.
+					warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
+				return LIST_OK;
 			}
-			return LIST_OK;
 		}
-		arg += l;
-		argl -= l;
-		// A folder named "INBOX" would be indistinguishable from the
-		// actual INBOX after prefix stripping, so drop it. This applies
-		// only to the fully uppercased spelling, as our canonical box
-		// names are case-sensitive (unlike IMAP's INBOX).
-		if (is_INBOX( ctx, arg, argl )) {
-			if (!arg[5])  // No need to complain about subfolders as well.
-				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
-			return LIST_OK;
-		}
-	} else if (is_inbox( ctx, arg, argl )) {
-	  inbox:
-		// The server might be weird and have a non-uppercase INBOX. It
-		// may legitimately do so, but we need the canonical spelling.
-		// Note that we do that only after prefix matching, under the
-		// assumption that the NAMESPACE (or Path) matches the
-		// capitalization of LIST.
-		memcpy( arg, "INBOX", 5 );
 	}
 	if (argl >= 5 && !memcmp( arg + argl - 5, ".lock", 5 )) /* workaround broken servers */
 		return LIST_OK;
@@ -2539,6 +2541,8 @@ imap_open_store_finalize( imap_store_t *ctx )
 	ctx->state = SST_GOOD;
 	if (!ctx->prefix)
 		ctx->prefix = "";
+	else
+		normalize_INBOX( ctx, ctx->prefix, -1 );
 	ctx->trashnc = TrashUnknown;
 	ctx->callbacks.imap_open( DRV_OK, ctx->callback_aux );
 }

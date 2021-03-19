@@ -54,6 +54,7 @@ typedef union maildir_store_conf {
 	store_conf_t gen;
 	struct {
 		STORE_CONF
+		char *path;
 		char *inbox;
 #ifdef USE_DB
 		int alt_map;
