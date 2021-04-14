@@ -1273,7 +1273,7 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 			return RESP_CANCEL;
 		}
 	} else if (!strcmp( "CAPABILITY", arg )) {
-		if (!(p = strchr( s, ']' ))) {
+		if (!s || !(p = strchr( s, ']' ))) {
 			error( "IMAP error: malformed CAPABILITY status\n" );
 			return RESP_CANCEL;
 		}
