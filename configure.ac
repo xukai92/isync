@@ -1,4 +1,4 @@
-AC_INIT([isync], [1.4.1])
+AC_INIT([isync], [1.4.2])
 AC_CONFIG_HEADERS([autodefs.h])
 
 AC_CANONICAL_TARGET
