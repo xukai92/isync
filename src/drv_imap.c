@@ -217,7 +217,6 @@ typedef union {
 		IMAP_CMD
 		void (*callback)( int sts, uint uid, void *aux );
 		void *callback_aux;
-		uint out_uid;
 	};
 } imap_cmd_out_uid_t;
 
@@ -1289,11 +1288,22 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 		}
 		for (; isspace( (uchar)*s ); s++);
 		error( "*** IMAP ALERT *** %s\n", s );
-	} else if (cmd && !strcmp( "APPENDUID", arg )) {
+	} else if (!strcmp( "APPENDUID", arg )) {
+		// The checks ensure that:
+		// - cmd => this is the final tagged response of a command, at which
+		//   point cmd was already removed from ctx->in_progress, so param.uid
+		//   is available for reuse.
+		// - !param.uid => the command isn't actually a FETCH. This doesn't
+		//   really matter, as the field is safe to overwrite given the
+		//   previous condition; it just has no effect for non-APPENDs.
+		if (!cmd || cmd->param.uid) {
+			error( "IMAP error: unexpected APPENDUID status\n" );
+			return RESP_CANCEL;
+		}
 		if (!(arg = next_arg( &s )) ||
 		    (ctx->uidvalidity = strtoul( arg, &earg, 10 ), *earg) ||
 		    !(arg = next_arg( &s )) ||
-		    (((imap_cmd_out_uid_t *)cmd)->out_uid = strtoul( arg, &earg, 10 ), *earg != ']'))
+		    (cmd->param.uid = strtoul( arg, &earg, 10 ), *earg != ']'))
 		{
 			error( "IMAP error: malformed APPENDUID status\n" );
 			return RESP_CANCEL;
@@ -3167,7 +3177,6 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 	ctx->buffer_mem += data->len;
 	cmd->param.data_len = data->len;
 	cmd->param.data = data->data;
-	cmd->out_uid = 0;
 
 	if (to_trash) {
 		cmd->param.create = 1;
@@ -3203,7 +3212,7 @@ imap_store_msg_p2( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response 
 	imap_cmd_out_uid_t *cmdp = (imap_cmd_out_uid_t *)cmd;
 
 	transform_msg_response( &response );
-	cmdp->callback( response, cmdp->out_uid, cmdp->callback_aux );
+	cmdp->callback( response, cmdp->param.uid, cmdp->callback_aux );
 }
 
 /******************* imap_find_new_msgs *******************/
