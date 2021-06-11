@@ -335,42 +335,45 @@ done_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd, int response )
 static void
 send_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd )
 {
-	int litplus, iovcnt = 1;
-	int bufl;
-	const char *buffmt;
-	conn_iovec_t iov[3];
-	char buf[4096];
+	int litplus, iovcnt = 3;
+	uint tbufl, lbufl;
+	conn_iovec_t iov[5];
+	char tagbuf[16];
+	char lenbuf[16];
 
 	cmd->tag = ++ctx->nexttag;
+	tbufl = nfsnprintf( tagbuf, sizeof(tagbuf), "%d ", cmd->tag );
 	if (!cmd->param.data) {
-		buffmt = "%d %s\r\n";
+		memcpy( lenbuf, "\r\n", 3 );
+		lbufl = 2;
 		litplus = 0;
 	} else if ((cmd->param.to_trash && ctx->trashnc == TrashUnknown) || !CAP(LITERALPLUS) || cmd->param.data_len >= 100*1024) {
-		buffmt = "%d %s{%d}\r\n";
+		lbufl = nfsnprintf( lenbuf, sizeof(lenbuf), "{%u}\r\n", cmd->param.data_len );
 		litplus = 0;
 	} else {
-		buffmt = "%d %s{%d+}\r\n";
+		lbufl = nfsnprintf( lenbuf, sizeof(lenbuf), "{%u+}\r\n", cmd->param.data_len );
 		litplus = 1;
 	}
-DIAG_PUSH
-DIAG_DISABLE("-Wformat-nonliteral")
-	bufl = nfsnprintf( buf, sizeof(buf), buffmt,
-	                   cmd->tag, cmd->cmd, cmd->param.data_len );
-DIAG_POP
 	if (DFlags & DEBUG_NET) {
 		if (ctx->num_in_progress)
 			printf( "(%d in progress) ", ctx->num_in_progress );
 		if (starts_with( cmd->cmd, -1, "LOGIN", 5 ))
-			printf( "%s>>> %d LOGIN <user> <pass>\n", ctx->label, cmd->tag );
+			printf( "%s>>> %sLOGIN <user> <pass>\r\n", ctx->label, tagbuf );
 		else if (starts_with( cmd->cmd, -1, "AUTHENTICATE PLAIN", 18 ))
-			printf( "%s>>> %d AUTHENTICATE PLAIN <authdata>\n", ctx->label, cmd->tag );
+			printf( "%s>>> %sAUTHENTICATE PLAIN <authdata>\r\n", ctx->label, tagbuf );
 		else
-			printf( "%s>>> %s", ctx->label, buf );
+			printf( "%s>>> %s%s%s", ctx->label, tagbuf, cmd->cmd, lenbuf );
 		fflush( stdout );
 	}
-	iov[0].buf = buf;
-	iov[0].len = (uint)bufl;
+	iov[0].buf = tagbuf;
+	iov[0].len = tbufl;
 	iov[0].takeOwn = KeepOwn;
+	iov[1].buf = cmd->cmd;
+	iov[1].len = strlen( cmd->cmd );
+	iov[1].takeOwn = KeepOwn;
+	iov[2].buf = lenbuf;
+	iov[2].len = lbufl;
+	iov[2].takeOwn = KeepOwn;
 	if (litplus) {
 		if (DFlags & DEBUG_NET_ALL) {
 			printf( "%s>>>>>>>>>\n", ctx->label );
@@ -378,15 +381,15 @@ DIAG_POP
 			printf( "%s>>>>>>>>>\n", ctx->label );
 			fflush( stdout );
 		}
-		iov[1].buf = cmd->param.data;
-		iov[1].len = cmd->param.data_len;
-		iov[1].takeOwn = GiveOwn;
+		iov[3].buf = cmd->param.data;
+		iov[3].len = cmd->param.data_len;
+		iov[3].takeOwn = GiveOwn;
 		cmd->param.data = NULL;
 		ctx->buffer_mem -= cmd->param.data_len;
-		iov[2].buf = "\r\n";
-		iov[2].len = 2;
-		iov[2].takeOwn = KeepOwn;
-		iovcnt = 3;
+		iov[4].buf = "\r\n";
+		iov[4].len = 2;
+		iov[4].takeOwn = KeepOwn;
+		iovcnt = 5;
 	}
 	socket_write( &ctx->conn, iov, iovcnt );
 	if (cmd->param.to_trash && ctx->trashnc == TrashUnknown)
@@ -512,7 +515,20 @@ imap_vprintf( const char *fmt, va_list ap )
 	const char *s;
 	char *d, *ed;
 	char c;
-	char buf[4096];
+#define MAX_SEGS 16
+#define add_seg(s, l) \
+		do { \
+			if (nsegs == MAX_SEGS) \
+				oob(); \
+			segs[nsegs] = s; \
+			segls[nsegs++] = l; \
+			totlen += l; \
+		} while (0)
+	int nsegs = 0;
+	uint totlen = 0;
+	const char *segs[MAX_SEGS];
+	uint segls[MAX_SEGS];
+	char buf[1000];
 
 	d = buf;
 	ed = d + sizeof(buf);
@@ -521,12 +537,10 @@ imap_vprintf( const char *fmt, va_list ap )
 		c = *fmt;
 		if (!c || c == '%') {
 			uint l = fmt - s;
-			if (d + l > ed)
-				oob();
-			memcpy( d, s, l );
-			d += l;
+			if (l)
+				add_seg( s, l );
 			if (!c)
-				return nfstrndup( buf, (size_t)(d - buf) );
+				break;
 			uint maxlen = UINT_MAX;
 			c = *++fmt;
 			if (c == '\\') {
@@ -535,6 +549,7 @@ imap_vprintf( const char *fmt, va_list ap )
 					fputs( "Fatal: unsupported escaped format specifier. Please report a bug.\n", stderr );
 					abort();
 				}
+				char *bd = d;
 				s = va_arg( ap, const char * );
 				while ((c = *s++)) {
 					if (d + 2 > ed)
@@ -543,6 +558,9 @@ imap_vprintf( const char *fmt, va_list ap )
 						*d++ = '\\';
 					*d++ = c;
 				}
+				l = d - bd;
+				if (l)
+					add_seg( bd, l );
 			} else { /* \\ cannot be combined with anything else. */
 				if (c == '.') {
 					c = *++fmt;
@@ -556,18 +574,21 @@ imap_vprintf( const char *fmt, va_list ap )
 				if (c == 'c') {
 					if (d + 1 > ed)
 						oob();
+					add_seg( d, 1 );
 					*d++ = (char)va_arg( ap , int );
 				} else if (c == 's') {
 					s = va_arg( ap, const char * );
 					l = strnlen( s, maxlen );
-					if (d + l > ed)
-						oob();
-					memcpy( d, s, l );
-					d += l;
+					if (l)
+						add_seg( s, l );
 				} else if (c == 'd') {
-					d += nfsnprintf( d, ed - d, "%d", va_arg( ap , int ) );
+					l = nfsnprintf( d, ed - d, "%d", va_arg( ap, int ) );
+					add_seg( d, l );
+					d += l;
 				} else if (c == 'u') {
-					d += nfsnprintf( d, ed - d, "%u", va_arg( ap , uint ) );
+					l = nfsnprintf( d, ed - d, "%u", va_arg( ap, uint ) );
+					add_seg( d, l );
+					d += l;
 				} else {
 					fputs( "Fatal: unsupported format specifier. Please report a bug.\n", stderr );
 					abort();
@@ -578,6 +599,13 @@ imap_vprintf( const char *fmt, va_list ap )
 			fmt++;
 		}
 	}
+	char *out = d = nfmalloc( totlen + 1 );
+	for (int i = 0; i < nsegs; i++) {
+		memcpy( d, segs[i], segls[i] );
+		d += segls[i];
+	}
+	*d = 0;
+	return out;
 }
 
 static void
