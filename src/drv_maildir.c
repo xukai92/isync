@@ -395,7 +395,7 @@ static int maildir_list_inbox( maildir_store_t *ctx, int flags, const char *base
 static int maildir_list_path( maildir_store_t *ctx, int flags, const char *inbox );
 
 static int
-maildir_list_recurse( maildir_store_t *ctx, int isBox, int flags,
+maildir_list_recurse( maildir_store_t *ctx, int isBox, int flags, int depth,
                       const char *inbox, uint inboxLen, const char *basePath, uint basePathLen,
                       char *path, int pathLen, char *name, int nameLen )
 {
@@ -414,6 +414,12 @@ maildir_list_recurse( maildir_store_t *ctx, int isBox, int flags,
 	if (isBox > 1 && style == SUB_UNSET) {
 		error( "Maildir error: found subfolder '%.*s', but store '%s' does not specify SubFolders style\n",
 		       nameLen - 1, name, ctx->conf->name );
+		closedir( dir );
+		return -1;
+	}
+	if (++depth > 10) {
+		// We do the other checks first to avoid confusing error messages for files.
+		error( "Maildir error: path %s is too deeply nested. Symlink loop?\n", path );
 		closedir( dir );
 		return -1;
 	}
@@ -464,7 +470,7 @@ maildir_list_recurse( maildir_store_t *ctx, int isBox, int flags,
 				add_string_list( &ctx->boxes, name );
 			path[pl] = 0;
 			name[nl++] = '/';
-			if (maildir_list_recurse( ctx, isBox + 1, flags, inbox, inboxLen, basePath, basePathLen, path, pl, name, nl ) < 0) {
+			if (maildir_list_recurse( ctx, isBox + 1, flags, depth, inbox, inboxLen, basePath, basePathLen, path, pl, name, nl ) < 0) {
 				closedir( dir );
 				return -1;
 			}
@@ -485,7 +491,7 @@ maildir_list_inbox( maildir_store_t *ctx, int flags, const char *basePath )
 
 	add_string_list( &ctx->boxes, "INBOX" );
 	return maildir_list_recurse(
-	        ctx, 1, flags, NULL, 0, basePath, basePath ? strlen( basePath ) - 1 : 0,
+	        ctx, 1, flags, 0, NULL, 0, basePath, basePath ? strlen( basePath ) - 1 : 0,
 	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s/", ctx->conf->inbox ),
 	        name, nfsnprintf( name, _POSIX_PATH_MAX, "INBOX/" ) );
 }
@@ -502,7 +508,7 @@ maildir_list_path( maildir_store_t *ctx, int flags, const char *inbox )
 	if (maildir_ensure_path( ctx->conf ) < 0)
 		return -1;
 	return maildir_list_recurse(
-	        ctx, 0, flags, inbox, inbox ? strlen( inbox ) : 0, NULL, 0,
+	        ctx, 0, flags, 0, inbox, inbox ? strlen( inbox ) : 0, NULL, 0,
 	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", ctx->conf->path ),
 	        name, 0 );
 }
