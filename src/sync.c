@@ -410,7 +410,7 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 {
 	char *in_buf = vars->data.data;
 	uint in_len = vars->data.len;
-	uint idx = 0, sbreak = 0, ebreak = 0, break2 = 0;
+	uint idx = 0, sbreak = 0, ebreak = 0, break2 = UINT_MAX;
 	uint lines = 0, hdr_crs = 0, bdy_crs = 0, app_cr = 0, extra = 0;
 	uint add_subj = 0;
 
@@ -428,7 +428,7 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 					if (!vars->minimal)
 						goto oke;
 				} else {
-					if (!break2 && vars->minimal && !strncasecmp( in_buf + start, "Subject:", 8 )) {
+					if (break2 == UINT_MAX && vars->minimal && !strncasecmp( in_buf + start, "Subject:", 8 )) {
 						break2 = start + 8;
 						if (in_buf[break2] == ' ')
 							break2++;
@@ -441,7 +441,7 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 						sbreak = ebreak = start;
 					if (vars->minimal) {
 						in_len = idx;
-						if (!break2) {
+						if (break2 == UINT_MAX) {
 							break2 = start;
 							add_subj = 1;
 						}
@@ -496,7 +496,7 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 	char *out_buf = vars->data.data = nfmalloc( vars->data.len );
 	idx = 0;
 	if (vars->srec) {
-		if (break2 && break2 < sbreak) {
+		if (break2 < sbreak) {
 			copy_msg_bytes( &out_buf, in_buf, &idx, break2, in_cr, out_cr );
 			memcpy( out_buf, dummy_pfx, strlen(dummy_pfx) );
 			out_buf += strlen(dummy_pfx);
@@ -512,7 +512,7 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 		*out_buf++ = '\n';
 		idx = ebreak;
 
-		if (break2 >= sbreak) {
+		if (break2 != UINT_MAX && break2 >= sbreak) {
 			copy_msg_bytes( &out_buf, in_buf, &idx, break2, in_cr, out_cr );
 			if (!add_subj) {
 				memcpy( out_buf, dummy_pfx, strlen(dummy_pfx) );
