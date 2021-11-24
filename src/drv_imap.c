@@ -1439,6 +1439,10 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	}
 	arg = list->val;
 	argl = (int)list->len;
+	if (argl > 1000) {
+		warn( "IMAP warning: ignoring unreasonably long mailbox name '%.100s[...]'\n", arg );
+		return LIST_OK;
+	}
 	// The server might be weird and have a non-uppercase INBOX. It
 	// may legitimately do so, but we need the canonical spelling.
 	normalize_INBOX( ctx, arg, argl );
