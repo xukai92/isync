@@ -1168,7 +1168,8 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 					}
 					goto retry;
 				}
-				entry->size = (uint)st.st_size;
+				// The clipped value is good enough for MaxSize comparisons.
+				entry->size = st.st_size > UINT_MAX ? UINT_MAX : (uint)st.st_size;
 			}
 			if (want_tuid || want_msgid) {
 				if (!(f = fopen( buf, "r" ))) {
@@ -1563,12 +1564,17 @@ maildir_fetch_msg( store_t *gctx, message_t *gmsg, msg_data_t *data, int minimal
 		}
 	}
 	fstat( fd, &st );
+	if (st.st_size > INT_MAX) {
+		error( "Maildir error: %s is too big", buf );
+		goto mbad;
+	}
 	data->len = st.st_size;
 	if (data->date == -1)
 		data->date = st.st_mtime;
 	data->data = nfmalloc( data->len );
 	if (read( fd, data->data, data->len ) != data->len) {
 		sys_error( "Maildir error: cannot read %s", buf );
+	  mbad:
 		close( fd );
 		cb( DRV_MSG_BAD, aux );
 		return;
