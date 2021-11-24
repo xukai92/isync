@@ -877,6 +877,11 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			bytes = (int)(cur->len = strtoul( s + 1, &s, 10 ));
 			if (*s != '}' || *++s)
 				goto bail;
+			if ((uint)bytes >= INT_MAX) {
+				error( "IMAP error: excessively large literal from %s "
+				       "- THIS MIGHT BE AN ATTEMPT TO HACK YOU!\n", ctx->conn.name );
+				goto bail;
+			}
 
 			s = cur->val = nfmalloc( cur->len + 1 );
 			s[cur->len] = 0;
