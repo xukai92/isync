@@ -494,6 +494,12 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars, int t )
 	}
 
 	vars->data.len = in_len + extra;
+	if (vars->data.len > INT_MAX) {
+		warn( "Warning: message %u from %s is too big after conversion; skipping.\n",
+		      vars->msg->uid, str_fn[1-t] );
+		free( in_buf );
+		return 0;
+	}
 	char *out_buf = vars->data.data = nfmalloc( vars->data.len );
 	idx = 0;
 	if (vars->srec) {
