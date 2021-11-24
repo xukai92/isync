@@ -406,7 +406,7 @@ copy_msg_bytes( char **out_ptr, const char *in_buf, uint *in_idx, uint in_len, i
 }
 
 static int
-copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
+copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars, int t )
 {
 	char *in_buf = vars->data.data;
 	uint in_len = vars->data.len;
@@ -451,7 +451,8 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 				goto nloop;
 			}
 		}
-		/* invalid message */
+		warn( "Warning: message %u from %s has incomplete header; skipping.\n",
+		      vars->msg->uid, str_fn[1-t] );
 		free( in_buf );
 		return 0;
 	  oke:
@@ -556,9 +557,7 @@ msg_fetched( int sts, void *aux )
 		scr = (svars->drv[1-t]->get_caps( svars->ctx[1-t] ) / DRV_CRLF) & 1;
 		tcr = (svars->drv[t]->get_caps( svars->ctx[t] ) / DRV_CRLF) & 1;
 		if (vars->srec || scr != tcr) {
-			if (!copy_msg_convert( scr, tcr, vars )) {
-				warn( "Warning: message %u from %s has incomplete header.\n",
-				      vars->msg->uid, str_fn[1-t] );
+			if (!copy_msg_convert( scr, tcr, vars, t )) {
 				vars->cb( SYNC_NOGOOD, 0, vars );
 				return;
 			}
