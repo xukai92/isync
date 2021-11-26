@@ -428,9 +428,10 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars, int t )
 					if (!vars->minimal)
 						goto oke;
 				} else {
-					if (break2 == UINT_MAX && vars->minimal && !strncasecmp( in_buf + start, "Subject:", 8 )) {
+					if (break2 == UINT_MAX && vars->minimal &&
+					    starts_with_upper( in_buf + start, (int)(in_len - start), "SUBJECT:", 8 )) {
 						break2 = start + 8;
-						if (in_buf[break2] == ' ')
+						if (break2 < in_len && in_buf[break2] == ' ')
 							break2++;
 					}
 					lines++;
