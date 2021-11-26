@@ -62,8 +62,8 @@ if test "x$ob_cv_perl_ver" = "xno"; then
 fi
 
 AC_CACHE_CHECK([whether strftime supports %z], ob_cv_strftime_z,
-    [AC_TRY_RUN(
-[#include <time.h>
+    [AC_RUN_IFELSE([AC_LANG_SOURCE([[
+#include <time.h>
 #include <string.h>
 
 int main(void)
@@ -73,7 +73,7 @@ int main(void)
     strftime(buf, sizeof(buf), "%z", localtime(&t));
     return !(buf[0] == '+' || buf[0] == '-');
 }
-], [ob_cv_strftime_z=yes], [ob_cv_strftime_z=no], [ob_cv_strftime_z="yes (assumed)"])])
+]])], [ob_cv_strftime_z=yes], [ob_cv_strftime_z=no], [ob_cv_strftime_z="yes (assumed)"])])
 if test "x$ob_cv_strftime_z" = x"no"; then
     AC_MSG_ERROR([libc lacks necessary feature])
 fi
@@ -96,7 +96,7 @@ fi
 
 have_ssl_paths=
 AC_ARG_WITH(ssl,
-  AC_HELP_STRING([--with-ssl[=PATH]], [where to look for SSL [detect]]),
+  AS_HELP_STRING([--with-ssl[=PATH]], [where to look for SSL [detect]]),
   [ob_cv_with_ssl=$withval])
 if test "x$ob_cv_with_ssl" != xno; then
   case $ob_cv_with_ssl in
@@ -193,12 +193,13 @@ AC_CACHE_CHECK([for Berkeley DB >= 4.1], ac_cv_berkdb4,
   [ac_cv_berkdb4=no
     sav_LIBS=$LIBS
     LIBS="$LIBS -ldb"
-   AC_TRY_LINK([#include <db.h>],
-               [DB *db;
-	        db_create(&db, 0, 0);
-	        db->truncate(db, 0, 0, 0);
-	        db->open(db, 0, "foo", "foo", DB_HASH, DB_CREATE, 0)],
-	       [ac_cv_berkdb4=yes])
+    AC_LINK_IFELSE([AC_LANG_PROGRAM(
+        [#include <db.h>],
+        [DB *db;
+         db_create(&db, 0, 0);
+         db->truncate(db, 0, 0, 0);
+         db->open(db, 0, "foo", "foo", DB_HASH, DB_CREATE, 0);
+        ])], [ac_cv_berkdb4=yes], [])
     LIBS=$sav_LIBS
   ])
 if test "x$ac_cv_berkdb4" = xyes; then
