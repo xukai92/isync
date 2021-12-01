@@ -1696,7 +1696,11 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 						JLOG( "> %u %u 0", (srec->uid[F], srec->uid[N]), "near side expired, orphaning far side" );
 						srec->uid[N] = 0;
 					} else {
-						if (srec->msg[t] && (srec->msg[t]->status & M_FLAGS) && srec->msg[t]->flags != srec->flags)
+						if (srec->msg[t] && (srec->msg[t]->status & M_FLAGS) &&
+						    // Ignore deleted flag, as that's what we'll change ourselves ...
+						    (((srec->msg[t]->flags & ~F_DELETED) != (srec->flags & ~F_DELETED)) ||
+						     // ... except for undeletion, as that's the opposite.
+						     (!(srec->msg[t]->flags & F_DELETED) && (srec->flags & F_DELETED))))
 							notice( "Notice: conflicting changes in (%u,%u)\n", srec->uid[F], srec->uid[N] );
 						if (svars->chan->ops[t] & OP_DELETE) {
 							debug( "  %sing delete\n", str_hl[t] );
